@@ -1,9 +1,9 @@
 // OmniJS script to get flagged tasks from OmniFocus
 (() => {
   try {
-    // Use default values since parameters are not easily available in JXA mode
-    const hideCompleted = true; // Default to true
-    const projectFilter = null;
+    // Read caller parameters (injected by scriptExecution.ts); fall back to defaults
+    const hideCompleted = (typeof injectedArgs !== 'undefined' && injectedArgs.hideCompleted !== undefined) ? injectedArgs.hideCompleted : true;
+    const projectFilter = (typeof injectedArgs !== 'undefined' && injectedArgs.projectFilter !== undefined) ? injectedArgs.projectFilter : null;
     
     // Helper function to format dates consistently
     function formatDate(date) {
