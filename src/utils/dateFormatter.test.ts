@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   appleScriptDateCode,
   formatDateForAppleScript,
+  formatDateInputForDisplay,
   formatDateTimeForDisplay,
   getDefaultDueTime,
   parseDateInput,
@@ -179,4 +180,31 @@ test('formatDateTimeForDisplay renders local YYYY-MM-DD HH:MM', () => {
 
 test('formatDateTimeForDisplay returns unparseable input unchanged', () => {
   assert.equal(formatDateTimeForDisplay('garbage'), 'garbage');
+});
+
+test('formatDateInputForDisplay treats date-only input as local, not UTC', () => {
+  assert.equal(formatDateInputForDisplay('2026-07-15'), '2026-07-15 00:00');
+});
+
+test('formatDateInputForDisplay applies defaultTime to date-only input', () => {
+  assert.equal(
+    formatDateInputForDisplay('2026-07-15', { defaultTime: '17:00' }),
+    '2026-07-15 17:00'
+  );
+});
+
+test('formatDateInputForDisplay keeps explicit time over defaultTime', () => {
+  assert.equal(
+    formatDateInputForDisplay('2026-07-15T09:30', { defaultTime: '17:00' }),
+    '2026-07-15 09:30'
+  );
+});
+
+test('formatDateInputForDisplay converts offset timestamps to local time', () => {
+  const local = new Date(2026, 6, 15, 17, 5);
+  assert.equal(formatDateInputForDisplay(local.toISOString()), '2026-07-15 17:05');
+});
+
+test('formatDateInputForDisplay returns unparseable input unchanged', () => {
+  assert.equal(formatDateInputForDisplay('07/08/2026'), '07/08/2026');
 });

@@ -1,4 +1,5 @@
 import { executeOmniFocusScript } from '../../utils/scriptExecution.js';
+import { formatDateTimeForDisplay } from '../../utils/dateFormatter.js';
 
 export interface GetFlaggedTasksOptions {
   hideCompleted?: boolean;
@@ -61,9 +62,9 @@ export async function getFlaggedTasks(options: GetFlaggedTasksOptions = {}): Pro
             }
             
             tasks.forEach((task: any, index: number) => {
-              const dueDateStr = task.dueDate ? ` [DUE: ${new Date(task.dueDate).toLocaleDateString()}]` : '';
-              const deferDateStr = task.deferDate ? ` [DEFER: ${new Date(task.deferDate).toLocaleDateString()}]` : '';
-              const plannedDateStr = task.plannedDate ? ` [PLAN: ${new Date(task.plannedDate).toLocaleDateString()}]` : '';
+              const dueDateStr = task.dueDate ? ` [DUE: ${formatDateTimeForDisplay(task.dueDate)}]` : '';
+              const deferDateStr = task.deferDate ? ` [DEFER: ${formatDateTimeForDisplay(task.deferDate)}]` : '';
+              const plannedDateStr = task.plannedDate ? ` [PLAN: ${formatDateTimeForDisplay(task.plannedDate)}]` : '';
               const statusStr = task.taskStatus !== 'Available' ? ` (${task.taskStatus})` : '';
               const estimateStr = task.estimatedMinutes ? ` ⏱${task.estimatedMinutes}m` : '';
               

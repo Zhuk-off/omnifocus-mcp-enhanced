@@ -3,6 +3,16 @@
 
 (() => {
   try {
+    // Helper function to format dates consistently
+    function formatDate(date) {
+      if (!date) return null;
+      const p = n => (n < 10 ? '0' : '') + n;
+      const off = -date.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off);
+      return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) +
+        'T' + p(date.getHours()) + ':' + p(date.getMinutes()) + ':' + p(date.getSeconds()) +
+        s + p(Math.floor(a / 60)) + ':' + p(a % 60);
+    }
+
     // 获取注入的参数
     const perspectiveName = injectedArgs && injectedArgs.perspectiveName ? injectedArgs.perspectiveName : null;
 
@@ -37,15 +47,15 @@
           note: t.note || "",
           project: t.containingProject ? t.containingProject.name : (t.project ? t.project.name : null),
           tags: t.tags ? t.tags.map(tag => tag.name) : [],
-          dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-          deferDate: t.deferDate ? t.deferDate.toISOString() : null,
-          plannedDate: t.plannedDate ? t.plannedDate.toISOString() : null,
+          dueDate: formatDate(t.dueDate),
+          deferDate: formatDate(t.deferDate),
+          plannedDate: formatDate(t.plannedDate),
           completed: t.completed,
           flagged: t.flagged,
           estimatedMinutes: t.estimatedMinutes || null,
           repetitionRule: t.repetitionRule ? t.repetitionRule.toString() : null,
-          creationDate: t.added ? t.added.toISOString() : null,
-          completionDate: t.completedDate ? t.completedDate.toISOString() : null,
+          creationDate: formatDate(t.added),
+          completionDate: formatDate(t.completedDate),
           parent: parentId,     // 父任务ID
           children: [],         // 子任务ID列表，后面补充
         };

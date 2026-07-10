@@ -191,6 +191,28 @@ export function formatDateTimeForDisplay(isoDate: string): string {
 }
 
 /**
+ * Format a user-supplied input date string (as accepted by `parseDateInput`)
+ * as local "YYYY-MM-DD HH:MM" for confirmation messages.
+ *
+ * Unlike `formatDateTimeForDisplay`, this never feeds a date-only string to
+ * `new Date(string)` (which would parse it as UTC midnight), and it applies
+ * the same `defaultTime` the write path used — so the confirmation shows the
+ * date and time that were actually set.
+ */
+export function formatDateInputForDisplay(isoDate: string, options: ParseDateOptions = {}): string {
+  let components: DateTimeComponents;
+  try {
+    components = parseDateInput(isoDate, options);
+  } catch {
+    return isoDate;
+  }
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${components.year}-${pad(components.month)}-${pad(components.day)} ` +
+    `${pad(components.hours)}:${pad(components.minutes)}`;
+}
+
+/**
  * Build AppleScript code that constructs a Date from numeric components.
  *
  * This avoids locale-dependent parsing (e.g. `date "28 February 2026"`) and

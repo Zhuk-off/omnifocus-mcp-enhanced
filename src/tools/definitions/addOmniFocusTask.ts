@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { addOmniFocusTask, AddOmniFocusTaskParams } from '../primitives/addOmniFocusTask.js';
+import { formatDateInputForDisplay, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 
 export const schema = z.object({
@@ -38,11 +39,11 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
         : "";
 
       let dueDateText = args.dueDate
-        ? ` due on ${new Date(args.dueDate).toLocaleDateString()}`
+        ? ` due on ${formatDateInputForDisplay(args.dueDate, { defaultTime: getDefaultDueTime() })}`
         : "";
 
       let plannedDateText = args.plannedDate
-        ? ` planned for ${new Date(args.plannedDate).toLocaleDateString()}`
+        ? ` planned for ${formatDateInputForDisplay(args.plannedDate)}`
         : "";
 
       return {

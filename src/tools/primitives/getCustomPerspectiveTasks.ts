@@ -1,4 +1,5 @@
 import { executeOmniFocusScript } from '../../utils/scriptExecution.js';
+import { formatDateTimeForDisplay } from '../../utils/dateFormatter.js';
 import {
   buildPerspectiveTaskTree,
   PerspectiveDisplayMode,
@@ -203,15 +204,15 @@ function formatTaskDetails(task: PerspectiveTaskNode, includeProject: boolean): 
   }
 
   if (task.dueDate) {
-    details.push(`截止: ${formatDate(task.dueDate)}`);
+    details.push(`截止: ${formatDateTimeForDisplay(task.dueDate)}`);
   }
 
   if (task.deferDate) {
-    details.push(`推迟: ${formatDate(task.deferDate)}`);
+    details.push(`推迟: ${formatDateTimeForDisplay(task.deferDate)}`);
   }
 
   if (task.plannedDate) {
-    details.push(`计划: ${formatDate(task.plannedDate)}`);
+    details.push(`计划: ${formatDateTimeForDisplay(task.plannedDate)}`);
   }
 
   if (typeof task.estimatedMinutes === 'number') {
@@ -233,12 +234,4 @@ function formatTaskDetails(task: PerspectiveTaskNode, includeProject: boolean): 
   }
 
   return details;
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString('zh-CN');
 }

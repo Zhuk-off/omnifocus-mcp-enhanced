@@ -4,6 +4,16 @@
     // 获取参数（如果有的话）
     const args = typeof injectedArgs !== 'undefined' ? injectedArgs : {};
     const limit = args.limit || 20;
+
+    // Helper function to format dates consistently
+    function formatDate(date) {
+      if (!date) return null;
+      const p = n => (n < 10 ? '0' : '') + n;
+      const off = -date.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off);
+      return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) +
+        'T' + p(date.getHours()) + ':' + p(date.getMinutes()) + ':' + p(date.getSeconds()) +
+        s + p(Math.floor(a / 60)) + ':' + p(a % 60);
+    }
     
     console.log("=== 今天完成任务查询开始 ===");
     
@@ -66,10 +76,10 @@
           note: task.note || "",
           taskStatus: statusMap[task.taskStatus] || "Unknown",
           flagged: task.flagged,
-          dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-          deferDate: task.deferDate ? task.deferDate.toISOString() : null,
-          plannedDate: task.plannedDate ? task.plannedDate.toISOString() : null,
-          completedDate: task.completionDate ? task.completionDate.toISOString() : null,
+          dueDate: formatDate(task.dueDate),
+          deferDate: formatDate(task.deferDate),
+          plannedDate: formatDate(task.plannedDate),
+          completedDate: formatDate(task.completionDate),
           estimatedMinutes: task.estimatedMinutes,
           projectId: task.containingProject ? task.containingProject.id.primaryKey : null,
           projectName: task.containingProject ? task.containingProject.name : null,
