@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -9,27 +9,31 @@ import { dirname } from 'path';
 import { existsSync } from 'fs';
 import { sanitizeForJson } from './sanitize.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Hard backstop so a stuck OmniFocus (modal automation-permission prompt, sync
 // conflict, beachball) can't hang a tool handler — and a whole batch — forever.
 // Generous by default: dump/large reads plus a cold first call can take tens of
 // seconds, so a short timeout would abort legitimate work. Configurable via env.
 const OSASCRIPT_TIMEOUT_MS = Number(process.env.OMNIFOCUS_MCP_OSASCRIPT_TIMEOUT_MS) || 120000;
-const OSASCRIPT_MAX_BUFFER = 10 * 1024 * 1024;
+// 64MB accommodates large database dumps and base64-encoded attachments
+// (base64 inflates ~33%, so this allows attachments up to ~48MB).
+const OSASCRIPT_MAX_BUFFER = Number(process.env.OMNIFOCUS_MCP_OSASCRIPT_MAX_BUFFER) || 64 * 1024 * 1024;
 
 // Stable marker so batch handlers can detect a timeout and fail fast instead of
 // re-hitting the same modal dialog for every remaining item.
 export const OSASCRIPT_TIMEOUT_MARKER = 'osascript timed out';
 
 /**
- * Run an osascript command with a hard timeout (SIGKILL — osascript can ignore
- * SIGTERM while blocked on a synchronous Apple Event) and a large output buffer.
- * Translates a timeout kill into an explanatory error.
+ * Run osascript with a hard timeout (SIGKILL — osascript can ignore SIGTERM
+ * while blocked on a synchronous Apple Event) and a large output buffer.
+ * Uses execFile (no shell), so the temp path needs no quoting and survives
+ * spaces/metacharacters in a custom TMPDIR. Translates timeout/overflow kills
+ * into explanatory errors.
  */
-async function runOsascript(command: string): Promise<{ stdout: string; stderr: string }> {
+async function runOsascript(args: string[]): Promise<{ stdout: string; stderr: string }> {
   try {
-    return await execAsync(command, {
+    return await execFileAsync('osascript', args, {
       timeout: OSASCRIPT_TIMEOUT_MS,
       killSignal: 'SIGKILL',
       maxBuffer: OSASCRIPT_MAX_BUFFER,
@@ -39,6 +43,13 @@ async function runOsascript(command: string): Promise<{ stdout: string; stderr: 
       throw new Error(
         `${OSASCRIPT_TIMEOUT_MARKER} after ${OSASCRIPT_TIMEOUT_MS}ms — OmniFocus may be showing a ` +
         `dialog (e.g. an automation-permission prompt) or syncing. Check OmniFocus, then retry.`
+      );
+    }
+    if (err && (err.code === 'ERR_CHILD_PROCESS_STDOUT_MAXBUFFER' || /maxBuffer/.test(err.message || ''))) {
+      throw new Error(
+        `osascript output exceeded ${Math.round(OSASCRIPT_MAX_BUFFER / (1024 * 1024))}MB — the requested ` +
+        `data (attachment or database dump) is too large. Narrow the request, or raise ` +
+        `OMNIFOCUS_MCP_OSASCRIPT_MAX_BUFFER.`
       );
     }
     throw err;
@@ -58,8 +69,8 @@ export async function executeAppleScript(script: string): Promise<string> {
     // Write the script to a temporary file
     writeFileSync(tempFile, script);
 
-    // Execute using osascript with the file path (no shell escaping needed)
-    const { stdout, stderr } = await runOsascript(`osascript ${tempFile}`);
+    // Execute using osascript with the file path (no shell involved)
+    const { stdout, stderr } = await runOsascript([tempFile]);
 
     if (stderr) {
       console.error("AppleScript stderr:", stderr);
@@ -86,7 +97,7 @@ export async function executeJXA(script: string): Promise<any[]> {
     writeFileSync(tempFile, script);
 
     // Execute the script using osascript
-    const { stdout, stderr } = await runOsascript(`osascript -l JavaScript ${tempFile}`);
+    const { stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile]);
 
     if (stderr) {
       console.error("Script stderr output:", stderr);
@@ -238,7 +249,7 @@ export async function executeOmniFocusScript(scriptPath: string, args?: any): Pr
       writeFileSync(tempFile, jxaScript);
 
       // Execute the JXA script using osascript
-      ({ stdout, stderr } = await runOsascript(`osascript -l JavaScript ${tempFile}`));
+      ({ stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile]));
     } finally {
       // Clean up even when execAsync throws (timeout / maxBuffer), else temp files leak.
       try {

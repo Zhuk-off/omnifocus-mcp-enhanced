@@ -430,11 +430,20 @@ export async function filterTasks(options: FilterTasksOptions = {}): Promise<str
       }
 
       if (data.tasks && Array.isArray(data.tasks)) {
+        // The script sorts by name and truncates to sourceLimit BEFORE our
+        // client-side filters run, so hitting that cap means matches whose names
+        // sort past the window were silently dropped — warn instead of hiding it.
+        const sourceWindowFull = needsClientSideFiltering && data.tasks.length >= sourceLimit;
         const postFilteredTasks = applyClientSideFilters(data.tasks, options);
         const sortedTasks = sortTasks(postFilteredTasks, sortBy, sortOrder);
         const limitedTasks = sortedTasks.slice(0, limit);
         const taskCount = limitedTasks.length;
         const totalCount = sortedTasks.length;
+
+        if (sourceWindowFull) {
+          output += `⚠️ Filtered from the first ${sourceLimit} tasks (sorted by name); ` +
+            `some matches may be missing. Narrow the filter (project, status) or raise \`limit\`.\n\n`;
+        }
 
         if (taskCount === 0) {
           output += '🎯 No tasks match your filter criteria.\n';
