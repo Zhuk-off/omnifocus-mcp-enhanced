@@ -1,4 +1,5 @@
 import { executeOmniFocusScript } from '../../utils/scriptExecution.js';
+import { formatDateTimeForDisplay } from '../../utils/dateFormatter.js';
 
 export interface FilterTasksOptions {
   // 🎯 任务状态过滤
@@ -486,23 +487,23 @@ function formatTask(task: any): string {
   // 日期信息
   const dateInfo: string[] = [];
   if (task.dueDate) {
-    const dueDateStr = new Date(task.dueDate).toLocaleDateString();
+    const dueDateStr = formatDateTimeForDisplay(task.dueDate);
     const isOverdue = new Date(task.dueDate) < new Date();
     dateInfo.push(isOverdue ? `⚠️ DUE: ${dueDateStr}` : `📅 DUE: ${dueDateStr}`);
   }
 
   if (task.deferDate) {
-    const deferDateStr = new Date(task.deferDate).toLocaleDateString();
+    const deferDateStr = formatDateTimeForDisplay(task.deferDate);
     dateInfo.push(`🚀 DEFER: ${deferDateStr}`);
   }
 
   if (task.plannedDate) {
-    const plannedDateStr = new Date(task.plannedDate).toLocaleDateString();
+    const plannedDateStr = formatDateTimeForDisplay(task.plannedDate);
     dateInfo.push(`🗓 PLAN: ${plannedDateStr}`);
   }
 
   if (task.completedDate) {
-    const completedDateStr = new Date(task.completedDate).toLocaleDateString();
+    const completedDateStr = formatDateTimeForDisplay(task.completedDate);
     dateInfo.push(`✅ DONE: ${completedDateStr}`);
   }
 

@@ -6,7 +6,11 @@
         // Helper function to format dates consistently or return null
         function formatDate(date) {
           if (!date) return null;
-          return date.toISOString();
+          const p = n => (n < 10 ? '0' : '') + n;
+          const off = -date.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off);
+          return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) +
+            'T' + p(date.getHours()) + ':' + p(date.getMinutes()) + ':' + p(date.getSeconds()) +
+            s + p(Math.floor(a / 60)) + ':' + p(a % 60);
         }
     
         // Helper function to safely get enum values - Simplified with direct mapping

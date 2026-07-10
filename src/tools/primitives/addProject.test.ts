@@ -23,6 +23,27 @@ test('addProject date handling uses preamble variables outside OmniFocus tell bl
   assert.doesNotMatch(script, /set planned date of newProject to date "/);
 });
 
+test('addProject applies default due time to date-only dueDate but midnight to deferDate', () => {
+  const saved = process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME;
+  try {
+    process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME = '17:00';
+    const script = generateAppleScript({
+      name: 'Project with date-only dates',
+      dueDate: '2026-02-27',
+      deferDate: '2026-02-25'
+    });
+
+    assert.match(script, /set hours of dueDateValue to 17/);
+    assert.match(script, /set hours of deferDateValue to 0/);
+  } finally {
+    if (saved === undefined) {
+      delete process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME;
+    } else {
+      process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME = saved;
+    }
+  }
+});
+
 test('addProject keeps apostrophes and doubles backslashes in text fields', () => {
   const script = generateAppleScript({
     name: "Client's \\ Roadmap",

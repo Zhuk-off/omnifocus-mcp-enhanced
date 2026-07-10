@@ -24,6 +24,28 @@ test('editItem date handling uses preamble variables outside OmniFocus tell bloc
   assert.doesNotMatch(script, /set planned date of foundItem to date "/);
 });
 
+test('editItem applies default due time to date-only newDueDate but midnight to newDeferDate', () => {
+  const saved = process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME;
+  try {
+    process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME = '17:00';
+    const script = generateAppleScript({
+      id: 'abc123',
+      itemType: 'task',
+      newDueDate: '2026-02-24',
+      newDeferDate: '2026-02-23'
+    });
+
+    assert.match(script, /set hours of newDueDateValue to 17/);
+    assert.match(script, /set hours of newDeferDateValue to 0/);
+  } finally {
+    if (saved === undefined) {
+      delete process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME;
+    } else {
+      process.env.OMNIFOCUS_MCP_DEFAULT_DUE_TIME = saved;
+    }
+  }
+});
+
 test('validateEditItemParams rejects task move parameters for project edits', () => {
   const validation = validateEditItemParams({
     id: 'project-1',

@@ -1,6 +1,6 @@
 import { executeAppleScript } from '../../utils/scriptExecution.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
-import { appleScriptDateCode } from '../../utils/dateFormatter.js';
+import { appleScriptDateCode, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
 
 // Status options for tasks and projects
@@ -121,7 +121,7 @@ export function generateAppleScript(params: EditItemParams): string {
   const datePreambleParts: string[] = [];
 
   if (params.newDueDate !== undefined && params.newDueDate !== '') {
-    datePreambleParts.push(appleScriptDateCode(params.newDueDate, 'newDueDateValue'));
+    datePreambleParts.push(appleScriptDateCode(params.newDueDate, 'newDueDateValue', { defaultTime: getDefaultDueTime() }));
   }
   if (params.newDeferDate !== undefined && params.newDeferDate !== '') {
     datePreambleParts.push(appleScriptDateCode(params.newDeferDate, 'newDeferDateValue'));

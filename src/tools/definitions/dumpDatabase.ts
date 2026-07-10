@@ -35,28 +35,31 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
   }
 }
 
-// Function to format date in compact format (M/D)
+// Function to format date in compact format (M/D HH:MM)
 function formatCompactDate(isoDate: string | null): string {
   if (!isoDate) return '';
-  
+
   const date = new Date(isoDate);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  if (isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 // Function to format the database in the compact report format
 export function formatCompactReport(database: any, options: { hideCompleted: boolean, hideRecurringDuplicates: boolean }): string {
   const { hideCompleted, hideRecurringDuplicates } = options;
   
-  // Get current date for the header
+  // Get current date for the header (local day, not UTC)
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   
   let output = `# OMNIFOCUS [${dateStr}]\n\n`;
   
   // Add legend
   output += `FORMAT LEGEND:
 F: Folder | P: Project | •: Task | 🚩: Flagged
-Dates: [M/D] | [DUE:M/D] [PLAN:M/D] [defer:M/D] | Duration: (30m) or (2h) | Tags: <tag1,tag2>
+Dates: [M/D HH:MM] | [DUE:M/D HH:MM] [PLAN:M/D HH:MM] [defer:M/D HH:MM] | Duration: (30m) or (2h) | Tags: <tag1,tag2>
 Status: #next #avail #block #due #over #compl #drop\n\n`;
   
   // Map of folder IDs to folder objects for quick lookup

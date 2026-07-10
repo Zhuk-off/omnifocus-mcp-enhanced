@@ -1,4 +1,5 @@
 import { executeOmniFocusScript } from '../../utils/scriptExecution.js';
+import { formatDateTimeForDisplay } from '../../utils/dateFormatter.js';
 
 export interface GetInboxTasksOptions {
   hideCompleted?: boolean;
@@ -36,8 +37,8 @@ export async function getInboxTasks(options: GetInboxTasksOptions = {}): Promise
 
           data.tasks.forEach((task: any, index: number) => {
             const flagSymbol = task.flagged ? '🚩 ' : '';
-            const dueDateStr = task.dueDate ? ` [DUE: ${new Date(task.dueDate).toLocaleDateString()}]` : '';
-            const plannedDateStr = task.plannedDate ? ` [PLAN: ${new Date(task.plannedDate).toLocaleDateString()}]` : '';
+            const dueDateStr = task.dueDate ? ` [DUE: ${formatDateTimeForDisplay(task.dueDate)}]` : '';
+            const plannedDateStr = task.plannedDate ? ` [PLAN: ${formatDateTimeForDisplay(task.plannedDate)}]` : '';
             const statusStr = task.taskStatus !== 'Available' ? ` (${task.taskStatus})` : '';
 
             output += `${index + 1}. ${flagSymbol}${task.name}${dueDateStr}${plannedDateStr}${statusStr}\n`;

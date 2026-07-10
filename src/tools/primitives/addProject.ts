@@ -1,5 +1,5 @@
 import { executeAppleScript } from '../../utils/scriptExecution.js';
-import { appleScriptDateCode } from '../../utils/dateFormatter.js';
+import { appleScriptDateCode, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
 
@@ -25,7 +25,7 @@ export function generateAppleScript(params: AddProjectParams): string {
   const name = escapeAppleScriptString(params.name);
   const note = params.note ? escapeAppleScriptString(params.note) : '';
   // Build date variables outside OmniFocus tell block to avoid locale parsing issues.
-  const dueDateCode = params.dueDate ? appleScriptDateCode(params.dueDate, 'dueDateValue') : '';
+  const dueDateCode = params.dueDate ? appleScriptDateCode(params.dueDate, 'dueDateValue', { defaultTime: getDefaultDueTime() }) : '';
   const deferDateCode = params.deferDate ? appleScriptDateCode(params.deferDate, 'deferDateValue') : '';
   const plannedDateCode = params.plannedDate ? appleScriptDateCode(params.plannedDate, 'plannedDateValue') : '';
   const datePreamble = [dueDateCode, deferDateCode, plannedDateCode].filter(Boolean).join('\n');

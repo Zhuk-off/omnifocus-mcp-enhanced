@@ -9,15 +9,19 @@
     // Helper function to format dates consistently
     function formatDate(date) {
       if (!date) return null;
-      return date.toISOString();
+      const p = n => (n < 10 ? '0' : '') + n;
+      const off = -date.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off);
+      return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate()) +
+        'T' + p(date.getHours()) + ':' + p(date.getMinutes()) + ':' + p(date.getSeconds()) +
+        s + p(Math.floor(a / 60)) + ':' + p(a % 60);
     }
     
-    // Helper function to get date without time for grouping
+    // Helper function to get date without time for grouping (local day, not UTC)
     function getDateKey(date) {
       if (!date) return null;
       const d = new Date(date);
-      d.setHours(0, 0, 0, 0);
-      return d.toISOString().split('T')[0];
+      const p = n => (n < 10 ? '0' : '') + n;
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
     }
     
     // Get task status enum mapping
