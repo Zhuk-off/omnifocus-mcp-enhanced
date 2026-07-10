@@ -97,6 +97,33 @@ test('generateAppleScript moves task to project before applying property edits',
   assert.match(script, /set end of changedProperties to "moved \(project\)"/);
 });
 
+test('replaceTags resolves/creates target tags before removing existing ones', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    replaceTags: ['work', 'urgent']
+  });
+
+  const resolveIndex = script.indexOf('set end of resolvedTags to tagObj');
+  const removeIndex = script.indexOf('remove existingTag from tags of foundItem');
+
+  // Target tags must be resolved/created before any existing tag is stripped,
+  // so a failure can't leave the task with no tags.
+  assert.ok(resolveIndex > -1 && removeIndex > -1);
+  assert.ok(resolveIndex < removeIndex);
+  assert.match(script, /set resolvedTags to \{\}/);
+});
+
+test('empty newName is not applied (would blank the item)', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    newName: ''
+  });
+
+  assert.doesNotMatch(script, /set name of foundItem to ""/);
+});
+
 test('generateAppleScript protects against moving task under itself or descendants', () => {
   const script = generateAppleScript({
     id: 'task-123',

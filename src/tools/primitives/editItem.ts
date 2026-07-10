@@ -278,8 +278,10 @@ ${datePreamble}
     }
   }
 
-  // Common property updates for both tasks and projects
-  if (params.newName !== undefined) {
+  // Common property updates for both tasks and projects.
+  // Guard against an empty name (defense in depth; the schema also rejects it):
+  // setting an item's name to "" leaves it blank and unfindable by name.
+  if (params.newName !== undefined && params.newName !== '') {
     script += `
           -- Update name
           set name of foundItem to "${escapeAppleScriptString(params.newName)}"
@@ -389,16 +391,11 @@ ${datePreamble}
     if (params.replaceTags && params.replaceTags.length > 0) {
       const tagsList = params.replaceTags.map(tag => `"${escapeAppleScriptString(tag)}"`).join(', ');
       script += `
-          -- Replace all tags
+          -- Replace all tags. Resolve/create every target tag FIRST, so that if
+          -- creating a tag fails we abort (via the outer error handler) with the
+          -- item's existing tags still intact — never stripped-then-not-replaced.
           set tagNames to {${tagsList}}
-          set existingTags to tags of foundItem
-
-          -- First clear all existing tags
-          repeat with existingTag in existingTags
-            remove existingTag from tags of foundItem
-          end repeat
-
-          -- Then add new tags
+          set resolvedTags to {}
           repeat with tagName in tagNames
             set tagObj to missing value
             try
@@ -407,6 +404,15 @@ ${datePreamble}
             if tagObj is missing value then
               set tagObj to make new tag with properties {name:tagName}
             end if
+            set end of resolvedTags to tagObj
+          end repeat
+
+          -- Only now clear existing tags and apply the resolved set
+          set existingTags to tags of foundItem
+          repeat with existingTag in existingTags
+            remove existingTag from tags of foundItem
+          end repeat
+          repeat with tagObj in resolvedTags
             add tagObj to tags of foundItem
           end repeat
           set end of changedProperties to "tags (replaced)"

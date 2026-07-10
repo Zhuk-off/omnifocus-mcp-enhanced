@@ -8,8 +8,8 @@ export const schema = z.object({
   itemType: z.enum(['task', 'project']).describe("Type of item to edit ('task' or 'project')"),
 
   // Common editable fields
-  newName: z.string().optional().describe("New name for the item"),
-  newNote: z.string().optional().describe("New note for the item"),
+  newName: z.string().min(1).optional().describe("New name for the item (cannot be empty). Omit to leave the name unchanged."),
+  newNote: z.string().optional().describe("New note for the item. Omit to leave the note unchanged; set to an empty string to clear the existing note."),
   newDueDate: z.string().optional().describe("New due date in ISO format (YYYY-MM-DD or full ISO date); set to empty string to clear"),
   newDeferDate: z.string().optional().describe("New defer date in ISO format (YYYY-MM-DD or full ISO date); set to empty string to clear"),
   newPlannedDate: z.string().optional().describe("New planned date in ISO format (YYYY-MM-DD or full ISO date); set to empty string to clear"),
