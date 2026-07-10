@@ -67,3 +67,83 @@ test('applyClientSideFilters applies plannedBefore and plannedAfter window', () 
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].id, 'in-window');
 });
+
+test('applyClientSideFilters applies dueToday (previously ignored)', () => {
+  const tasks = [
+    { id: 'today', name: 'due today', dueDate: isoWithOffset(0), tags: [] },
+    { id: 'tomorrow', name: 'due tomorrow', dueDate: isoWithOffset(1), tags: [] },
+    { id: 'none', name: 'no due date', dueDate: null, tags: [] },
+  ];
+
+  const filtered = applyClientSideFilters(tasks as any[], { dueToday: true } as any);
+
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, 'today');
+});
+
+test('applyClientSideFilters applies overdue', () => {
+  const tasks = [
+    { id: 'past', name: 'overdue', dueDate: isoWithOffset(-2), tags: [] },
+    { id: 'future', name: 'not due', dueDate: isoWithOffset(2), tags: [] },
+    { id: 'none', name: 'no due', dueDate: null, tags: [] },
+  ];
+
+  const filtered = applyClientSideFilters(tasks as any[], { overdue: true } as any);
+
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, 'past');
+});
+
+test('applyClientSideFilters applies dueBefore/dueAfter window', () => {
+  const tasks = [
+    { id: 'early', name: 'early', dueDate: '2026-02-10T09:00:00.000Z', tags: [] },
+    { id: 'in', name: 'in window', dueDate: '2026-02-15T09:00:00.000Z', tags: [] },
+    { id: 'late', name: 'late', dueDate: '2026-02-22T09:00:00.000Z', tags: [] },
+  ];
+
+  const filtered = applyClientSideFilters(tasks as any[], {
+    dueAfter: '2026-02-12',
+    dueBefore: '2026-02-20',
+  } as any);
+
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, 'in');
+});
+
+test('applyClientSideFilters applies estimate and hasEstimate filters', () => {
+  const tasks = [
+    { id: 'a', name: 'no estimate', estimatedMinutes: null, tags: [] },
+    { id: 'b', name: 'short', estimatedMinutes: 10, tags: [] },
+    { id: 'c', name: 'long', estimatedMinutes: 60, tags: [] },
+  ];
+
+  assert.deepEqual(
+    applyClientSideFilters(tasks as any[], { hasEstimate: true } as any).map(t => t.id),
+    ['b', 'c']
+  );
+  assert.deepEqual(
+    applyClientSideFilters(tasks as any[], { estimateMin: 30 } as any).map(t => t.id),
+    ['c']
+  );
+  assert.deepEqual(
+    applyClientSideFilters(tasks as any[], { estimateMax: 30 } as any).map(t => t.id),
+    ['b']
+  );
+});
+
+test('applyClientSideFilters applies hasNote and inInbox filters', () => {
+  const tasks = [
+    { id: 'a', name: 'with note', note: 'something', inInbox: false, tags: [] },
+    { id: 'b', name: 'blank note', note: '   ', inInbox: true, tags: [] },
+    { id: 'c', name: 'no note', note: '', inInbox: true, tags: [] },
+  ];
+
+  assert.deepEqual(
+    applyClientSideFilters(tasks as any[], { hasNote: true } as any).map(t => t.id),
+    ['a']
+  );
+  assert.deepEqual(
+    applyClientSideFilters(tasks as any[], { inInbox: true } as any).map(t => t.id),
+    ['b', 'c']
+  );
+});

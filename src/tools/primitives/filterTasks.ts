@@ -140,7 +140,18 @@ function shouldApplyClientSideFilters(options: FilterTasksOptions): boolean {
     options.plannedThisWeek ||
     options.plannedThisMonth ||
     options.plannedBefore ||
-    options.plannedAfter
+    options.plannedAfter ||
+    options.dueToday ||
+    options.dueThisWeek ||
+    options.dueThisMonth ||
+    options.dueBefore ||
+    options.dueAfter ||
+    options.overdue ||
+    options.hasEstimate ||
+    options.estimateMin !== undefined ||
+    options.estimateMax !== undefined ||
+    options.hasNote ||
+    options.inInbox
   );
 }
 
@@ -286,6 +297,87 @@ export function applyClientSideFilters(tasks: any[], options: FilterTasksOptions
         return plannedDate ? plannedDate > plannedAfter : false;
       });
     }
+  }
+
+  // Due-date filters. Declared in the schema but previously not applied anywhere,
+  // so the tool returned unfiltered tasks under a "Due: Today" header.
+  if (options.dueToday) {
+    filteredTasks = filteredTasks.filter(task => {
+      const dueDate = parseDate(task?.dueDate);
+      return dueDate ? isDateInTodayRange(dueDate) : false;
+    });
+  }
+
+  if (options.dueThisWeek) {
+    filteredTasks = filteredTasks.filter(task => {
+      const dueDate = parseDate(task?.dueDate);
+      return dueDate ? isDateInCurrentWeek(dueDate) : false;
+    });
+  }
+
+  if (options.dueThisMonth) {
+    filteredTasks = filteredTasks.filter(task => {
+      const dueDate = parseDate(task?.dueDate);
+      return dueDate ? isDateInCurrentMonth(dueDate) : false;
+    });
+  }
+
+  if (options.dueBefore) {
+    const dueBefore = parseDate(options.dueBefore);
+    if (dueBefore) {
+      filteredTasks = filteredTasks.filter(task => {
+        const dueDate = parseDate(task?.dueDate);
+        return dueDate ? dueDate < dueBefore : false;
+      });
+    }
+  }
+
+  if (options.dueAfter) {
+    const dueAfter = parseDate(options.dueAfter);
+    if (dueAfter) {
+      filteredTasks = filteredTasks.filter(task => {
+        const dueDate = parseDate(task?.dueDate);
+        return dueDate ? dueDate > dueAfter : false;
+      });
+    }
+  }
+
+  if (options.overdue) {
+    const now = new Date();
+    filteredTasks = filteredTasks.filter(task => {
+      const dueDate = parseDate(task?.dueDate);
+      return dueDate ? dueDate < now : false;
+    });
+  }
+
+  // Estimate filters
+  if (options.hasEstimate) {
+    filteredTasks = filteredTasks.filter(task =>
+      typeof task?.estimatedMinutes === 'number' && task.estimatedMinutes > 0
+    );
+  }
+
+  if (options.estimateMin !== undefined) {
+    filteredTasks = filteredTasks.filter(task =>
+      typeof task?.estimatedMinutes === 'number' && task.estimatedMinutes >= options.estimateMin!
+    );
+  }
+
+  if (options.estimateMax !== undefined) {
+    filteredTasks = filteredTasks.filter(task =>
+      typeof task?.estimatedMinutes === 'number' && task.estimatedMinutes <= options.estimateMax!
+    );
+  }
+
+  // Note / inbox filters
+  if (options.hasNote) {
+    filteredTasks = filteredTasks.filter(task =>
+      typeof task?.note === 'string' && task.note.trim().length > 0
+    );
+  }
+
+  if (options.inInbox) {
+    filteredTasks = filteredTasks.filter(task => task?.inInbox === true);
   }
 
   return filteredTasks;
