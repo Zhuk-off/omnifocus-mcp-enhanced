@@ -28,44 +28,44 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
     // Call the batchRemoveItems function
     const result = await batchRemoveItems(args.items as BatchRemoveItemsParams[]);
     
-    if (result.success) {
-      const successCount = result.results.filter(r => r.success).length;
-      const failureCount = result.results.filter(r => !r.success).length;
-      
-      let message = `✅ Successfully removed ${successCount} items.`;
-      
-      if (failureCount > 0) {
-        message += ` ⚠️ Failed to remove ${failureCount} items.`;
-      }
-      
-      // Include details about removed items
-      const details = result.results.map((item, index) => {
-        if (item.success) {
-          const itemType = args.items[index].itemType;
-          return `- ✅ ${itemType}: "${item.name}"`;
-        } else {
-          const itemType = args.items[index].itemType;
-          const identifier = args.items[index].id || args.items[index].name;
-          return `- ❌ ${itemType}: ${identifier} - Error: ${item.error}`;
-        }
-      }).join('\n');
-      
+    // Catastrophic failure: nothing was processed (e.g. the whole call threw).
+    if (result.results.length === 0) {
       return {
         content: [{
           type: "text" as const,
-          text: `${message}\n\n${details}`
-        }]
-      };
-    } else {
-      // Batch operation failed completely
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Failed to process batch removal: ${result.error}`
+          text: `Failed to process batch removal: ${result.error || 'unknown error'}`
         }],
         isError: true
       };
     }
+
+    const successCount = result.results.filter(r => r.success).length;
+    const failureCount = result.results.filter(r => !r.success).length;
+
+    let message = `✅ Removed ${successCount} of ${result.results.length} items.`;
+    if (failureCount > 0) {
+      message += ` ⚠️ ${failureCount} failed.`;
+    }
+
+    // Always list per-item outcomes so a partial or total failure keeps its reasons.
+    const details = result.results.map((item, index) => {
+      const itemType = args.items[index]?.itemType ?? 'item';
+      if (item.success) {
+        return `- ✅ ${itemType}: "${item.name}"`;
+      }
+      const identifier = args.items[index]?.id || args.items[index]?.name || '(unknown)';
+      return `- ❌ ${itemType}: ${identifier} - Error: ${item.error}`;
+    }).join('\n');
+
+    return {
+      content: [{
+        type: "text" as const,
+        text: `${message}\n\n${details}`
+      }],
+      // Flag as an error only when nothing succeeded; partial success stays
+      // non-error but the ⚠️ count + per-item details make failures visible.
+      isError: successCount === 0
+    };
   } catch (err: unknown) {
     const error = err as Error;
     console.error(`Tool execution error: ${error.message}`);

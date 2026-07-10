@@ -23,12 +23,12 @@ export async function getTodayCompletedTasks(options: GetTodayCompletedTasksOpti
       }
       
       // 格式化完成任务结果
-      let output = `# ✅ 今天完成的任务\\n\\n`;
+      let output = `# ✅ 今天完成的任务\n\n`;
       
       if (data.tasks && Array.isArray(data.tasks)) {
         if (data.tasks.length === 0) {
-          output += "🎯 今天还没有完成任何任务。\\n";
-          output += "\\n**加油！** 完成一些任务来让这个列表变得丰富起来！\\n";
+          output += "🎯 今天还没有完成任何任务。\n";
+          output += "\n**加油！** 完成一些任务来让这个列表变得丰富起来！\n";
         } else {
           const taskCount = data.tasks.length;
           const totalCount = data.filteredCount || taskCount;
@@ -37,32 +37,32 @@ export async function getTodayCompletedTasks(options: GetTodayCompletedTasksOpti
           if (taskCount < totalCount) {
             output += `（显示前 ${taskCount} 个）`;
           }
-          output += `：\\n\\n`;
+          output += `：\n\n`;
           
           // 按项目分组显示任务
           const tasksByProject = groupTasksByProject(data.tasks);
           
           tasksByProject.forEach((tasks, projectName) => {
             if (tasksByProject.size > 1) {
-              output += `## 📁 ${projectName}\\n`;
+              output += `## 📁 ${projectName}\n`;
             }
             
             tasks.forEach((task: any) => {
               output += formatCompletedTask(task);
-              output += '\\n';
+              output += '\n';
             });
             
             if (tasksByProject.size > 1) {
-              output += '\\n';
+              output += '\n';
             }
           });
           
           // 显示总结
-          output += `\\n---\\n📊 **今日完成总结**: ${totalCount} 个任务已完成\\n`;
-          output += `📅 **查询时间**: ${new Date().toLocaleString()}\\n`;
+          output += `\n---\n📊 **今日完成总结**: ${totalCount} 个任务已完成\n`;
+          output += `📅 **查询时间**: ${new Date().toLocaleString()}\n`;
         }
       } else {
-        output += "无法获取任务数据\\n";
+        output += "无法获取任务数据\n";
       }
       
       return output;
@@ -127,17 +127,17 @@ function formatCompletedTask(task: any): string {
     output += ` (${additionalInfo.join(', ')})`;
   }
   
-  output += '\\n';
+  output += '\n';
   
   // 任务备注
   if (task.note && task.note.trim()) {
-    output += `  📝 ${task.note.trim()}\\n`;
+    output += `  📝 ${task.note.trim()}\n`;
   }
   
   // 标签
   if (task.tags && task.tags.length > 0) {
     const tagNames = task.tags.map((tag: any) => tag.name).join(', ');
-    output += `  🏷 ${tagNames}\\n`;
+    output += `  🏷 ${tagNames}\n`;
   }
   
   return output;

@@ -60,7 +60,9 @@ export async function getCustomPerspectiveTasks(options: GetCustomPerspectiveTas
     return formatProjectTree(perspectiveName, tree.projectGroups, tree.flatTasks.length, data.count || tree.flatTasks.length);
   } catch (error) {
     console.error('Error in getCustomPerspectiveTasks:', error);
-    return `❌ **错误**: ${error instanceof Error ? error.message : String(error)}`;
+    // Re-throw so the tool handler reports isError instead of returning the error
+    // text as a successful result (which reads to the LLM as "no tasks / all clear").
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
