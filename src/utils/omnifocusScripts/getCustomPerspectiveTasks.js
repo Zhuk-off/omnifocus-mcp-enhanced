@@ -26,14 +26,22 @@
       throw new Error(`未找到名为 "${perspectiveName}" 的自定义透视`);
     }
 
-    // 切换到指定透视
-    document.windows[0].perspective = perspective;
+    // 读取自定义透视需要一个打开的窗口
+    if (!document.windows || document.windows.length === 0) {
+      throw new Error("无法读取自定义透视：OmniFocus 没有打开的窗口");
+    }
+    let win = document.windows[0];
 
     // 用于存储所有任务，key为任务ID（支持层级关系）
     let taskMap = {};
 
+    // 保存用户当前透视，切换到目标透视读取，之后在 finally 中恢复，
+    // 避免这个只读工具静默改变用户可见的窗口
+    let previousPerspective = win.perspective;
+    win.perspective = perspective;
+
     // 遍历内容树，收集任务信息（含层级关系）
-    let rootNode = document.windows[0].content.rootNode;
+    let rootNode = win.content.rootNode;
 
     function collectTasks(node, parentId) {
       if (node.object && node.object instanceof Task) {
@@ -76,9 +84,13 @@
       }
     }
 
-    // 开始收集任务（根任务的parent为null）
-    if (rootNode && rootNode.children) {
-      rootNode.children.forEach(node => collectTasks(node, null));
+    // 开始收集任务（根任务的parent为null），完成后恢复用户之前的透视
+    try {
+      if (rootNode && rootNode.children) {
+        rootNode.children.forEach(node => collectTasks(node, null));
+      }
+    } finally {
+      try { win.perspective = previousPerspective; } catch (e) {}
     }
 
     // 计算任务总数
