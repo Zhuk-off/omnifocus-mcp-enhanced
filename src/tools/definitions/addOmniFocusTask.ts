@@ -11,6 +11,7 @@ export const schema = z.object({
   flagged: z.boolean().optional().describe("Whether the task is flagged or not"),
   estimatedMinutes: z.number().optional().describe("Estimated time to complete the task, in minutes"),
   tags: z.array(z.string()).optional().describe("Tags to assign to the task"),
+  createMissingTags: z.boolean().optional().describe("Create tags that don't exist yet (default false: unknown tags cause an error and the task is not created)"),
   projectName: z.string().optional().describe("The name of the project to add the task to (will add to inbox if not specified)"),
   parentTaskId: z.string().optional().describe("The ID of the parent task to create this task as a subtask"),
   parentTaskName: z.string().optional().describe("The name of the parent task to create this task as a subtask (alternative to parentTaskId)")

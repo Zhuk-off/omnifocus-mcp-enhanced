@@ -13,32 +13,65 @@ export interface AddOmniFocusTaskParams {
   flagged?: boolean;
   estimatedMinutes?: number;
   tags?: string[]; // Tag names
+  createMissingTags?: boolean; // Create tags that don't exist yet (default false: unknown tags fail the call)
   projectName?: string; // Project name to add task to
   parentTaskId?: string; // Parent task ID for subtask creation
   parentTaskName?: string; // Parent task name for subtask creation (alternative to ID)
 }
 
-export function buildTagAssignmentScript(tags: string[], targetVar: string): string {
+export function buildTagAssignmentScript(tags: string[], targetVar: string, createMissingTags = false): string {
   if (!tags || tags.length === 0) {
     return '';
   }
 
   return tags.map(tag => {
     const sanitizedTag = escapeAppleScriptString(tag);
+    const resolution = createMissingTags
+      ? `if theTag is missing value then
+              set theTag to make new tag with properties {name:"${sanitizedTag}"}
+            end if
+            add theTag to tags of ${targetVar}`
+      : `if theTag is not missing value then
+              add theTag to tags of ${targetVar}
+            end if`;
     return `
           try
             set theTag to missing value
             try
               set theTag to first flattened tag where name = "${sanitizedTag}"
             end try
-            if theTag is missing value then
-              set theTag to make new tag with properties {name:"${sanitizedTag}"}
-            end if
-            add theTag to tags of ${targetVar}
+            ${resolution}
           on error
             -- Ignore errors finding/adding tags
           end try`;
   }).join('\n');
+}
+
+export function buildTagVerificationScript(tags: string[]): string {
+  if (!tags || tags.length === 0) {
+    return '';
+  }
+
+  const tagList = tags.map(tag => `"${escapeAppleScriptString(tag)}"`).join(', ');
+  return `
+        -- Fail before creating or changing anything if a tag is unknown
+        set missingTags to {}
+        repeat with tagName in {${tagList}}
+          set tagExists to false
+          try
+            set theTag to first flattened tag where name = tagName
+            set tagExists to true
+          end try
+          if not tagExists then set end of missingTags to (tagName as string)
+        end repeat
+        if (count of missingTags) > 0 then
+          set missingTagsText to ""
+          repeat with i from 1 to count of missingTags
+            set missingTagsText to missingTagsText & item i of missingTags
+            if i < (count of missingTags) then set missingTagsText to missingTagsText & ", "
+          end repeat
+          return "{\\\"success\\\":false,\\\"error\\\":\\"" & my jsonEscape("Unknown tags: " & missingTagsText & ". Pass createMissingTags: true to create them.") & "\\\"}"
+        end if`;
 }
 
 /**
@@ -60,7 +93,9 @@ export function generateAppleScript(params: AddOmniFocusTaskParams): string {
   const parentTaskId = params.parentTaskId ? escapeAppleScriptString(params.parentTaskId) : '';
   const parentTaskName = params.parentTaskName ? escapeAppleScriptString(params.parentTaskName) : '';
   const jsonHelpers = buildAppleScriptJsonHelpers();
-  const tagAssignmentScript = buildTagAssignmentScript(tags, 'newTask');
+  const createMissingTags = params.createMissingTags === true;
+  const tagAssignmentScript = buildTagAssignmentScript(tags, 'newTask', createMissingTags);
+  const tagVerificationScript = createMissingTags ? '' : buildTagVerificationScript(tags);
 
   // Construct AppleScript with error handling
   let script = `
@@ -69,6 +104,7 @@ ${jsonHelpers}
 ${datePreamble}
     tell application "OmniFocus"
       tell front document
+${tagVerificationScript}
         -- Determine the container (parent task, project, or inbox)
         if "${parentTaskId}" is not "" then
           -- Create subtask using parent task ID

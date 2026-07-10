@@ -1,14 +1,69 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildTagAssignmentScript, generateAppleScript } from './addOmniFocusTask.js';
+import { buildTagAssignmentScript, buildTagVerificationScript, generateAppleScript } from './addOmniFocusTask.js';
 
-test('buildTagAssignmentScript creates missing tags before assignment', () => {
+test('buildTagAssignmentScript only assigns existing tags by default', () => {
   const script = buildTagAssignmentScript(['mcp-test-tag'], 'newTask');
+
+  assert.match(script, /set theTag to first flattened tag where name = "mcp-test-tag"/);
+  assert.match(script, /if theTag is not missing value then/);
+  assert.match(script, /add theTag to tags of newTask/);
+  assert.doesNotMatch(script, /make new tag/);
+});
+
+test('buildTagAssignmentScript creates missing tags when createMissingTags is true', () => {
+  const script = buildTagAssignmentScript(['mcp-test-tag'], 'newTask', true);
 
   assert.match(script, /set theTag to first flattened tag where name = "mcp-test-tag"/);
   assert.match(script, /if theTag is missing value then/);
   assert.match(script, /set theTag to make new tag with properties \{name:"mcp-test-tag"\}/);
   assert.match(script, /add theTag to tags of newTask/);
+});
+
+test('buildTagVerificationScript fails with the list of unknown tags', () => {
+  const script = buildTagVerificationScript(['Home', 'Errands']);
+
+  assert.match(script, /repeat with tagName in \{"Home", "Errands"\}/);
+  assert.match(script, /set end of missingTags to \(tagName as string\)/);
+  assert.match(script, /Unknown tags: /);
+  assert.match(script, /createMissingTags/);
+});
+
+test('buildTagVerificationScript escapes quotes and backslashes in tag names', () => {
+  const script = buildTagVerificationScript(['ta"g', 'back\\slash']);
+
+  assert.match(script, /\{"ta\\"g", "back\\\\slash"\}/);
+});
+
+test('generateAppleScript verifies tags before creating the task by default', () => {
+  const script = generateAppleScript({
+    name: 'Tagged task',
+    tags: ['Home']
+  });
+
+  const verifyIndex = script.indexOf('set missingTags to {}');
+  const createIndex = script.indexOf('make new inbox task');
+  assert.ok(verifyIndex > -1);
+  assert.ok(createIndex > -1);
+  assert.ok(verifyIndex < createIndex);
+  assert.doesNotMatch(script, /make new tag/);
+});
+
+test('generateAppleScript skips tag verification when createMissingTags is true', () => {
+  const script = generateAppleScript({
+    name: 'Tagged task',
+    tags: ['Home'],
+    createMissingTags: true
+  });
+
+  assert.doesNotMatch(script, /set missingTags to \{\}/);
+  assert.match(script, /make new tag/);
+});
+
+test('generateAppleScript emits no tag verification when there are no tags', () => {
+  const script = generateAppleScript({ name: 'No tags' });
+
+  assert.doesNotMatch(script, /set missingTags to/);
 });
 
 test('generateAppleScript builds date variables before OmniFocus tell block', () => {

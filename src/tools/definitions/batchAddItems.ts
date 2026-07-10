@@ -13,6 +13,7 @@ export const schema = z.object({
     flagged: z.boolean().optional().describe("Whether the item is flagged or not"),
     estimatedMinutes: z.number().optional().describe("Estimated time to complete the item, in minutes"),
     tags: z.array(z.string()).optional().describe("Tags to assign to the item"),
+    createMissingTags: z.boolean().optional().describe("Create tags that don't exist yet (default false: unknown tags cause an error and the item is not created)"),
 
     // Task-specific properties
     projectName: z.string().optional().describe("For tasks: The project name for top-level tasks. Omit this when parentTaskId or parentTaskName is set."),
@@ -30,6 +31,19 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
     // Call the batchAddItems function
     const result = await batchAddItems(args.items as BatchAddItemsParams[]);
 
+    // Include details about each item
+    const details = result.results.map((item, index) => {
+      if (item.success) {
+        const itemType = args.items[index].type;
+        const itemName = args.items[index].name;
+        return `- ✅ ${itemType}: "${itemName}" (id: ${item.id})`;
+      } else {
+        const itemType = args.items[index].type;
+        const itemName = args.items[index].name;
+        return `- ❌ ${itemType}: "${itemName}" - Error: ${item.error}`;
+      }
+    }).join('\n');
+
     if (result.success) {
       const successCount = result.results.filter(r => r.success).length;
       const failureCount = result.results.filter(r => !r.success).length;
@@ -40,24 +54,20 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
         message += ` ⚠️ Failed to add ${failureCount} items.`;
       }
 
-      // Include details about added items
-      const details = result.results.map((item, index) => {
-        if (item.success) {
-          const itemType = args.items[index].type;
-          const itemName = args.items[index].name;
-          return `- ✅ ${itemType}: "${itemName}" (id: ${item.id})`;
-        } else {
-          const itemType = args.items[index].type;
-          const itemName = args.items[index].name;
-          return `- ❌ ${itemType}: "${itemName}" - Error: ${item.error}`;
-        }
-      }).join('\n');
-
       return {
         content: [{
           type: "text" as const,
           text: `${message}\n\n${details}`
         }]
+      };
+    } else if (result.results.length > 0) {
+      // Every item failed; surface the per-item errors
+      return {
+        content: [{
+          type: "text" as const,
+          text: `❌ Failed to add ${result.results.length} items.\n\n${details}`
+        }],
+        isError: true
       };
     } else {
       // Batch operation failed completely

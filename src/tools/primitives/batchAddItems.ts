@@ -12,6 +12,7 @@ export type BatchAddItemsParams = {
   flagged?: boolean;
   estimatedMinutes?: number;
   tags?: string[];
+  createMissingTags?: boolean; // Create tags that don't exist yet (default false: unknown tags fail the item)
   projectName?: string; // For tasks
   parentTaskId?: string; // For subtasks
   parentTaskName?: string; // For subtasks (alternative to ID)
@@ -80,6 +81,7 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
             flagged: item.flagged,
             estimatedMinutes: item.estimatedMinutes,
             tags: item.tags,
+            createMissingTags: item.createMissingTags,
             projectName: item.projectName,
             parentTaskId: item.parentTaskId,
             parentTaskName: item.parentTaskName
@@ -103,6 +105,7 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
             flagged: item.flagged,
             estimatedMinutes: item.estimatedMinutes,
             tags: item.tags,
+            createMissingTags: item.createMissingTags,
             folderName: item.folderName,
             sequential: item.sequential
           };

@@ -2,6 +2,7 @@ import { executeAppleScript } from '../../utils/scriptExecution.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
 import { appleScriptDateCode, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
+import { buildTagVerificationScript } from './addOmniFocusTask.js';
 
 // Status options for tasks and projects
 type TaskStatus = 'incomplete' | 'completed' | 'dropped';
@@ -27,6 +28,7 @@ export interface EditItemParams {
   addTags?: string[];           // Tags to add to the task
   removeTags?: string[];        // Tags to remove from the task
   replaceTags?: string[];       // Tags to replace all existing tags with
+  createMissingTags?: boolean;  // Create tags from addTags/replaceTags that don't exist yet (default false: unknown tags fail the edit)
   newProjectId?: string;        // Move task to a new project by ID
   newProjectName?: string;      // Move task to a new project by name
   newParentTaskId?: string;     // Move task under a new parent task by ID
@@ -117,6 +119,10 @@ export function generateAppleScript(params: EditItemParams): string {
   const newParentTaskId = params.newParentTaskId ? escapeAppleScriptString(params.newParentTaskId) : '';
   const newParentTaskName = params.newParentTaskName ? escapeAppleScriptString(params.newParentTaskName) : '';
   const jsonHelpers = buildAppleScriptJsonHelpers();
+  const createMissingTags = params.createMissingTags === true;
+  // Apply logic prefers replaceTags over addTags, but unknown tags in either
+  // list must fail the edit rather than be silently ignored
+  const tagsToVerify = [...new Set([...(params.replaceTags ?? []), ...(params.addTags ?? [])])];
 
   const datePreambleParts: string[] = [];
 
@@ -180,6 +186,10 @@ ${datePreamble}
           set itemId to id of foundItem as string
           set changedProperties to {}
 `;
+
+  if (itemType === 'task' && !createMissingTags && tagsToVerify.length > 0) {
+    script += buildTagVerificationScript(tagsToVerify) + '\n';
+  }
 
   if (itemType === 'task' && hasTaskMoveTarget(params)) {
     if (params.moveToInbox === true) {
@@ -386,6 +396,15 @@ ${datePreamble}
     }
 
     // Handle tag operations
+    const tagResolutionScript = createMissingTags
+      ? `if tagObj is missing value then
+              set tagObj to make new tag with properties {name:tagName}
+            end if
+            add tagObj to tags of foundItem`
+      : `if tagObj is not missing value then
+              add tagObj to tags of foundItem
+            end if`;
+
     if (params.replaceTags && params.replaceTags.length > 0) {
       const tagsList = params.replaceTags.map(tag => `"${escapeAppleScriptString(tag)}"`).join(', ');
       script += `
@@ -404,10 +423,7 @@ ${datePreamble}
             try
               set tagObj to first flattened tag where name = tagName
             end try
-            if tagObj is missing value then
-              set tagObj to make new tag with properties {name:tagName}
-            end if
-            add tagObj to tags of foundItem
+            ${tagResolutionScript}
           end repeat
           set end of changedProperties to "tags (replaced)"
 `;
@@ -423,10 +439,7 @@ ${datePreamble}
             try
               set tagObj to first flattened tag where name = tagName
             end try
-            if tagObj is missing value then
-              set tagObj to make new tag with properties {name:tagName}
-            end if
-            add tagObj to tags of foundItem
+            ${tagResolutionScript}
           end repeat
           set end of changedProperties to "tags (added)"
 `;

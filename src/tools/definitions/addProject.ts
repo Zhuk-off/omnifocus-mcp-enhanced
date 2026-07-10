@@ -11,6 +11,7 @@ export const schema = z.object({
   flagged: z.boolean().optional().describe("Whether the project is flagged or not"),
   estimatedMinutes: z.number().optional().describe("Estimated time to complete the project, in minutes"),
   tags: z.array(z.string()).optional().describe("Tags to assign to the project"),
+  createMissingTags: z.boolean().optional().describe("Create tags that don't exist yet (default false: unknown tags cause an error and the project is not created)"),
   folderName: z.string().optional().describe("The name of the folder to add the project to (will add to root if not specified)"),
   sequential: z.boolean().optional().describe("Whether tasks in the project should be sequential (default: false)")
 });

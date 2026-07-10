@@ -65,3 +65,29 @@ test('addProject escapes JSON response values through AppleScript helper', () =>
   assert.match(script, /my jsonEscape\(projectId\)/);
   assert.match(script, /my jsonEscape\(projectNameValue\)/);
 });
+
+test('addProject verifies tags before creating the project by default', () => {
+  const script = generateAppleScript({
+    name: 'Tagged project',
+    tags: ['Home']
+  });
+
+  const verifyIndex = script.indexOf('set missingTags to {}');
+  const createIndex = script.indexOf('make new project');
+  assert.ok(verifyIndex > -1);
+  assert.ok(createIndex > -1);
+  assert.ok(verifyIndex < createIndex);
+  assert.match(script, /add theTag to tags of newProject/);
+  assert.doesNotMatch(script, /make new tag/);
+});
+
+test('addProject creates missing tags when createMissingTags is true', () => {
+  const script = generateAppleScript({
+    name: 'Tagged project',
+    tags: ['Home'],
+    createMissingTags: true
+  });
+
+  assert.doesNotMatch(script, /set missingTags to \{\}/);
+  assert.match(script, /set theTag to make new tag with properties \{name:"Home"\}/);
+});

@@ -157,3 +157,81 @@ test('generateAppleScript escapes edit responses through AppleScript helper', ()
   assert.match(script, /my jsonEscape\(changedPropsText\)/);
   assert.match(script, /my jsonEscape\(errorMessage\)/);
 });
+
+test('editItem verifies addTags before moving or editing by default', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    newProjectId: 'proj-1',
+    addTags: ['Home']
+  });
+
+  const verifyIndex = script.indexOf('set missingTags to {}');
+  const moveIndex = script.indexOf('move foundItem to end of tasks of destinationProject');
+  assert.ok(verifyIndex > -1);
+  assert.ok(moveIndex > -1);
+  assert.ok(verifyIndex < moveIndex);
+  assert.doesNotMatch(script, /make new tag/);
+});
+
+test('editItem verifies replaceTags before clearing existing tags by default', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    replaceTags: ['Home', 'Errands']
+  });
+
+  const verifyIndex = script.indexOf('set missingTags to {}');
+  const clearIndex = script.indexOf('remove existingTag from tags of foundItem');
+  assert.ok(verifyIndex > -1);
+  assert.ok(clearIndex > -1);
+  assert.ok(verifyIndex < clearIndex);
+  assert.match(script, /repeat with tagName in \{"Home", "Errands"\}/);
+  assert.doesNotMatch(script, /make new tag/);
+});
+
+test('editItem creates missing tags when createMissingTags is true', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    addTags: ['Home'],
+    createMissingTags: true
+  });
+
+  assert.doesNotMatch(script, /set missingTags to \{\}/);
+  assert.match(script, /set tagObj to make new tag with properties \{name:tagName\}/);
+});
+
+test('editItem verifies addTags even when replaceTags is present', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    replaceTags: ['Home'],
+    addTags: ['Errands']
+  });
+
+  assert.match(script, /set missingTags to \{\}/);
+  assert.match(script, /repeat with tagName in \{"Home", "Errands"\}/);
+});
+
+test('editItem deduplicates tags shared by replaceTags and addTags in verification', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    replaceTags: ['Home'],
+    addTags: ['Home', 'Errands']
+  });
+
+  assert.match(script, /repeat with tagName in \{"Home", "Errands"\}/);
+});
+
+test('editItem does not verify tags for removeTags only', () => {
+  const script = generateAppleScript({
+    id: 'task-123',
+    itemType: 'task',
+    removeTags: ['Home']
+  });
+
+  assert.doesNotMatch(script, /set missingTags to/);
+  assert.doesNotMatch(script, /make new tag/);
+});

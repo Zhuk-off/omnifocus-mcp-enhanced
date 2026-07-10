@@ -2,6 +2,7 @@ import { executeAppleScript } from '../../utils/scriptExecution.js';
 import { appleScriptDateCode, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
+import { buildTagAssignmentScript, buildTagVerificationScript } from './addOmniFocusTask.js';
 
 // Interface for project creation parameters
 export interface AddProjectParams {
@@ -13,6 +14,7 @@ export interface AddProjectParams {
   flagged?: boolean;
   estimatedMinutes?: number;
   tags?: string[]; // Tag names
+  createMissingTags?: boolean; // Create tags that don't exist yet (default false: unknown tags fail the call)
   folderName?: string; // Folder name to add project to
   sequential?: boolean; // Whether tasks should be sequential or parallel
 }
@@ -35,24 +37,9 @@ export function generateAppleScript(params: AddProjectParams): string {
   const folderName = params.folderName ? escapeAppleScriptString(params.folderName) : '';
   const sequential = params.sequential === true;
   const jsonHelpers = buildAppleScriptJsonHelpers();
-  const tagAssignmentScript = tags.length > 0
-    ? tags.map(tag => {
-      const sanitizedTag = escapeAppleScriptString(tag);
-      return `
-          try
-            set theTag to missing value
-            try
-              set theTag to first flattened tag where name = "${sanitizedTag}"
-            end try
-            if theTag is missing value then
-              set theTag to make new tag with properties {name:"${sanitizedTag}"}
-            end if
-            add theTag to tags of newProject
-          on error
-            -- Ignore errors finding/adding tags
-          end try`;
-    }).join('\n')
-    : '';
+  const createMissingTags = params.createMissingTags === true;
+  const tagAssignmentScript = buildTagAssignmentScript(tags, 'newProject', createMissingTags);
+  const tagVerificationScript = createMissingTags ? '' : buildTagVerificationScript(tags);
 
   // Construct AppleScript with error handling
   let script = `
@@ -61,6 +48,7 @@ ${jsonHelpers}
 ${datePreamble}
     tell application "OmniFocus"
       tell front document
+${tagVerificationScript}
         -- Determine the container (root or folder)
         if "${folderName}" is "" then
           -- Create project at the root level

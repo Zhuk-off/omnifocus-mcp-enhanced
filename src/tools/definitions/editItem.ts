@@ -21,6 +21,7 @@ export const schema = z.object({
   addTags: z.array(z.string()).optional().describe("Tags to add to the task"),
   removeTags: z.array(z.string()).optional().describe("Tags to remove from the task"),
   replaceTags: z.array(z.string()).optional().describe("Tags to replace all existing tags with"),
+  createMissingTags: z.boolean().optional().describe("For tasks: create tags from addTags/replaceTags that don't exist yet (default false: unknown tags cause an error and no changes are applied)"),
   newProjectId: z.string().optional().describe("For tasks: move task to this project ID"),
   newProjectName: z.string().optional().describe("For tasks: move task to this project name (errors on duplicate names)"),
   newParentTaskId: z.string().optional().describe("For tasks: move task under this parent task ID"),
