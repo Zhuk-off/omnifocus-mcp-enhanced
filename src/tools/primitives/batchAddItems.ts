@@ -1,5 +1,6 @@
 import { addOmniFocusTask, AddOmniFocusTaskParams } from './addOmniFocusTask.js';
 import { addProject, AddProjectParams } from './addProject.js';
+import { OSASCRIPT_TIMEOUT_MARKER } from '../../utils/scriptExecution.js';
 
 // Define the parameters for the batch operation
 export type BatchAddItemsParams = {
@@ -128,11 +129,25 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
           error: itemError.message || "Unknown error processing item"
         });
       }
+
+      // Fail fast on a timeout: osascript was killed because OmniFocus is stuck
+      // (modal dialog / sync). Retrying every remaining item would just re-hit the
+      // same block for another timeout each, so stop and mark the rest as skipped.
+      const last = results[results.length - 1];
+      if (last && !last.success && last.error?.includes(OSASCRIPT_TIMEOUT_MARKER)) {
+        for (let i = index + 1; i < items.length; i++) {
+          results.push({
+            success: false,
+            error: `Skipped: aborted after a prior item timed out (OmniFocus may be showing a dialog or syncing).`
+          });
+        }
+        break;
+      }
     }
-    
+
     // Determine overall success (true if at least one item was added successfully)
     const overallSuccess = results.some(result => result.success);
-    
+
     return {
       success: overallSuccess,
       results: results

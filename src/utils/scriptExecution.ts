@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync } from 'fs';
@@ -10,19 +11,55 @@ import { sanitizeForJson } from './sanitize.js';
 
 const execAsync = promisify(exec);
 
+// Hard backstop so a stuck OmniFocus (modal automation-permission prompt, sync
+// conflict, beachball) can't hang a tool handler — and a whole batch — forever.
+// Generous by default: dump/large reads plus a cold first call can take tens of
+// seconds, so a short timeout would abort legitimate work. Configurable via env.
+const OSASCRIPT_TIMEOUT_MS = Number(process.env.OMNIFOCUS_MCP_OSASCRIPT_TIMEOUT_MS) || 120000;
+const OSASCRIPT_MAX_BUFFER = 10 * 1024 * 1024;
+
+// Stable marker so batch handlers can detect a timeout and fail fast instead of
+// re-hitting the same modal dialog for every remaining item.
+export const OSASCRIPT_TIMEOUT_MARKER = 'osascript timed out';
+
+/**
+ * Run an osascript command with a hard timeout (SIGKILL — osascript can ignore
+ * SIGTERM while blocked on a synchronous Apple Event) and a large output buffer.
+ * Translates a timeout kill into an explanatory error.
+ */
+async function runOsascript(command: string): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await execAsync(command, {
+      timeout: OSASCRIPT_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: OSASCRIPT_MAX_BUFFER,
+    });
+  } catch (err: any) {
+    if (err && err.killed && (err.signal === 'SIGKILL' || err.signal === 'SIGTERM')) {
+      throw new Error(
+        `${OSASCRIPT_TIMEOUT_MARKER} after ${OSASCRIPT_TIMEOUT_MS}ms — OmniFocus may be showing a ` +
+        `dialog (e.g. an automation-permission prompt) or syncing. Check OmniFocus, then retry.`
+      );
+    }
+    throw err;
+  }
+}
+
 /**
  * Safely execute AppleScript by writing to a temp file
  * This avoids shell escaping issues with quotes and special characters
  */
 export async function executeAppleScript(script: string): Promise<string> {
-  const tempFile = join(tmpdir(), `applescript_${Date.now()}.scpt`);
+  // Unique temp name: concurrent tool calls must never share a file (a shared
+  // path lets one call's script overwrite another's before osascript reads it).
+  const tempFile = join(tmpdir(), `applescript_${randomUUID()}.scpt`);
 
   try {
     // Write the script to a temporary file
     writeFileSync(tempFile, script);
 
     // Execute using osascript with the file path (no shell escaping needed)
-    const { stdout, stderr } = await execAsync(`osascript ${tempFile}`);
+    const { stdout, stderr } = await runOsascript(`osascript ${tempFile}`);
 
     if (stderr) {
       console.error("AppleScript stderr:", stderr);
@@ -41,23 +78,20 @@ export async function executeAppleScript(script: string): Promise<string> {
 
 // Helper function to execute OmniFocus scripts
 export async function executeJXA(script: string): Promise<any[]> {
+  // Unique temp name (see executeAppleScript) so concurrent calls don't collide.
+  const tempFile = join(tmpdir(), `jxa_script_${randomUUID()}.js`);
+
   try {
-    // Write the script to a temporary file in the system temp directory
-    const tempFile = join(tmpdir(), `jxa_script_${Date.now()}.js`);
-    
     // Write the script to the temporary file
     writeFileSync(tempFile, script);
-    
+
     // Execute the script using osascript
-    const { stdout, stderr } = await execAsync(`osascript -l JavaScript ${tempFile}`);
-    
+    const { stdout, stderr } = await runOsascript(`osascript -l JavaScript ${tempFile}`);
+
     if (stderr) {
       console.error("Script stderr output:", stderr);
     }
-    
-    // Clean up the temporary file
-    unlinkSync(tempFile);
-    
+
     // Parse the output as JSON and sanitize isolated surrogates
     try {
       const result = JSON.parse(stdout);
@@ -75,6 +109,13 @@ export async function executeJXA(script: string): Promise<any[]> {
   } catch (error) {
     console.error("Failed to execute JXA script:", error);
     throw error;
+  } finally {
+    // Clean up even when execAsync throws (timeout / maxBuffer), else temp files leak.
+    try {
+      unlinkSync(tempFile);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
   }
 }
 
@@ -166,9 +207,10 @@ export async function executeOmniFocusScript(scriptPath: string, args?: any): Pr
       );
     }
     
-    // Create a temporary file for our JXA wrapper script
-    const tempFile = join(tmpdir(), `jxa_wrapper_${Date.now()}.js`);
-    
+    // Create a temporary file for our JXA wrapper script.
+    // Unique temp name (see executeAppleScript) so concurrent calls don't collide.
+    const tempFile = join(tmpdir(), `jxa_wrapper_${randomUUID()}.js`);
+
     // Create a JXA script that will execute our OmniJS script in OmniFocus
     // Use JSON.stringify to safely embed the script content — avoids escaping issues
     // with template literals (backticks, ${...}) in OmniJS scripts like omnifocusDump.js
@@ -188,21 +230,28 @@ export async function executeOmniFocusScript(scriptPath: string, args?: any): Pr
       }
     }
     `;
-    
-    // Write the JXA script to the temporary file
-    writeFileSync(tempFile, jxaScript);
-    
-    // Execute the JXA script using osascript
-    // Increase maxBuffer to support large OmniFocus databases (1000+ tasks)
-    const { stdout, stderr } = await execAsync(`osascript -l JavaScript ${tempFile}`, { maxBuffer: 10 * 1024 * 1024 });
 
-    // Clean up the temporary file
-    unlinkSync(tempFile);
-    
+    let stdout: string;
+    let stderr: string;
+    try {
+      // Write the JXA script to the temporary file
+      writeFileSync(tempFile, jxaScript);
+
+      // Execute the JXA script using osascript
+      ({ stdout, stderr } = await runOsascript(`osascript -l JavaScript ${tempFile}`));
+    } finally {
+      // Clean up even when execAsync throws (timeout / maxBuffer), else temp files leak.
+      try {
+        unlinkSync(tempFile);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+
     if (stderr) {
       console.error("Script stderr output:", stderr);
     }
-    
+
     // Parse the output as JSON and sanitize isolated surrogates
     try {
       return sanitizeForJson(JSON.parse(stdout));

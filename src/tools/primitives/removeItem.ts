@@ -12,11 +12,13 @@ export interface RemoveItemParams {
 /**
  * Generate pure AppleScript for item removal
  */
-function generateAppleScript(params: RemoveItemParams): string {
+export function generateAppleScript(params: RemoveItemParams): string {
   // Sanitize and prepare parameters for AppleScript
   const id = params.id ? escapeAppleScriptString(params.id) : '';
   const name = params.name ? escapeAppleScriptString(params.name) : '';
   const itemType = params.itemType;
+  const singularType = itemType === 'task' ? 'flattened task' : 'flattened project';
+  const listName = itemType === 'task' ? 'flattened tasks' : 'flattened projects';
   const jsonHelpers = buildAppleScriptJsonHelpers();
 
   // Verify we have at least one identifier
@@ -39,26 +41,25 @@ ${jsonHelpers}
     script += `
         -- Try to find by ID first
         try
-          set foundItem to first ${itemType === 'task' ? 'flattened task' : 'flattened project'} where id = "${id}"
+          set foundItem to first ${singularType} where id = "${id}"
         end try
 `;
   }
 
-  // Add name search if provided (and no ID or as fallback)
-  if (!id && name) {
+  // Resolve by name with duplicate protection. delete is irreversible (deleting a
+  // project cascades to all its tasks), so a name that matches more than one item
+  // must be rejected — never delete an arbitrary first match. When an explicit id
+  // was given but not found, we deliberately do NOT fall back to name (fail-closed:
+  // a stale id must surface as "not found", not silently delete a same-named item).
+  if (name && !id) {
     script += `
-        -- Find by name
-        try
-          set foundItem to first ${itemType === 'task' ? 'flattened task' : 'flattened project'} where name = "${name}"
-        end try
-`;
-  } else if (id && name) {
-    script += `
-        -- If ID search failed, try to find by name as fallback
-        if foundItem is missing value then
-          try
-            set foundItem to first ${itemType === 'task' ? 'flattened task' : 'flattened project'} where name = "${name}"
-          end try
+        -- Find by name (reject ambiguous matches)
+        set nameMatches to (${listName} where name = "${name}")
+        set nameMatchCount to count of nameMatches
+        if nameMatchCount = 1 then
+          set foundItem to item 1 of nameMatches
+        else if nameMatchCount > 1 then
+          return "{\\\"success\\\":false,\\\"error\\\":\\"" & my jsonEscape("Ambiguous ${itemType} name: ${name}. Multiple matches found; please use id.") & "\\\"}"
         end if
 `;
   }

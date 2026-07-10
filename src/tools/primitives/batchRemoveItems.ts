@@ -1,4 +1,5 @@
 import { removeItem, RemoveItemParams } from './removeItem.js';
+import { OSASCRIPT_TIMEOUT_MARKER } from '../../utils/scriptExecution.js';
 
 // Define the parameters for the batch removal operation
 export type BatchRemoveItemsParams = RemoveItemParams;
@@ -27,7 +28,7 @@ export async function batchRemoveItems(items: BatchRemoveItemsParams[]): Promise
     const results: ItemResult[] = [];
     
     // Process each item in sequence
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       try {
         // Remove item
         const itemResult = await removeItem(item);
@@ -43,6 +44,19 @@ export async function batchRemoveItems(items: BatchRemoveItemsParams[]): Promise
           success: false,
           error: itemError.message || "Unknown error processing item"
         });
+      }
+
+      // Fail fast on a timeout (see batchAddItems): a stuck OmniFocus would time
+      // out every remaining item, so stop and mark the rest as skipped.
+      const last = results[results.length - 1];
+      if (last && !last.success && last.error?.includes(OSASCRIPT_TIMEOUT_MARKER)) {
+        for (let i = index + 1; i < items.length; i++) {
+          results.push({
+            success: false,
+            error: `Skipped: aborted after a prior item timed out (OmniFocus may be showing a dialog or syncing).`
+          });
+        }
+        break;
       }
     }
     
