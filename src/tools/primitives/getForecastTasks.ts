@@ -52,16 +52,17 @@ export async function getForecastTasks(options: GetForecastTasksOptions = {}): P
             const isTomorrow = taskDate.getTime() === today.getTime() + 24 * 60 * 60 * 1000;
             const isOverdue = taskDate < today;
             
+            // dateStr is the locale-independent YYYY-MM-DD day key itself
             let dateHeader = '';
             if (isOverdue) {
-              dateHeader = `## ⚠️ OVERDUE - ${taskDate.toLocaleDateString()}`;
+              dateHeader = `## ⚠️ OVERDUE - ${dateStr}`;
             } else if (isToday) {
-              dateHeader = `## 🔥 TODAY - ${taskDate.toLocaleDateString()}`;
+              dateHeader = `## 🔥 TODAY - ${dateStr}`;
             } else if (isTomorrow) {
-              dateHeader = `## ⏰ TOMORROW - ${taskDate.toLocaleDateString()}`;
+              dateHeader = `## ⏰ TOMORROW - ${dateStr}`;
             } else {
               const dayOfWeek = taskDate.toLocaleDateString('en-US', { weekday: 'long' });
-              dateHeader = `## 📅 ${dayOfWeek} - ${taskDate.toLocaleDateString()}`;
+              dateHeader = `## 📅 ${dayOfWeek} - ${dateStr}`;
             }
             
             output += `${dateHeader}\n`;
