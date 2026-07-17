@@ -1,5 +1,6 @@
 import { removeItem, RemoveItemParams } from './removeItem.js';
-import { OSASCRIPT_TIMEOUT_MARKER } from '../../utils/scriptExecution.js';
+import { OSASCRIPT_TIMEOUT_MARKER, OSASCRIPT_CANCELLED_MARKER, type ExecOptions } from '../../utils/scriptExecution.js';
+import { batchStopReason } from './batchAddItems.js';
 
 // Define the parameters for the batch removal operation
 export type BatchRemoveItemsParams = RemoveItemParams;
@@ -22,16 +23,26 @@ type BatchResult = {
 /**
  * Remove multiple items (tasks or projects) from OmniFocus
  */
-export async function batchRemoveItems(items: BatchRemoveItemsParams[]): Promise<BatchResult> {
+export async function batchRemoveItems(items: BatchRemoveItemsParams[], options?: ExecOptions): Promise<BatchResult> {
   try {
     // Results array to track individual operation outcomes
     const results: ItemResult[] = [];
-    
+    const startedAt = Date.now();
+
     // Process each item in sequence
     for (const [index, item] of items.entries()) {
+      // Stop on client cancellation / exhausted time budget (see batchAddItems).
+      const stopReason = batchStopReason(startedAt, options?.signal);
+      if (stopReason) {
+        for (let i = index; i < items.length; i++) {
+          results.push({ success: false, error: stopReason });
+        }
+        break;
+      }
+
       try {
         // Remove item
-        const itemResult = await removeItem(item);
+        const itemResult = await removeItem(item, options);
         results.push({
           success: itemResult.success,
           id: itemResult.id,
@@ -46,10 +57,12 @@ export async function batchRemoveItems(items: BatchRemoveItemsParams[]): Promise
         });
       }
 
-      // Fail fast on a timeout (see batchAddItems): a stuck OmniFocus would time
-      // out every remaining item, so stop and mark the rest as skipped.
+      // Fail fast on a timeout or cancellation (see batchAddItems): a stuck
+      // OmniFocus would time out every remaining item, so stop and mark the
+      // rest as skipped.
       const last = results[results.length - 1];
-      if (last && !last.success && last.error?.includes(OSASCRIPT_TIMEOUT_MARKER)) {
+      if (last && !last.success &&
+          (last.error?.includes(OSASCRIPT_TIMEOUT_MARKER) || last.error?.includes(OSASCRIPT_CANCELLED_MARKER))) {
         for (let i = index + 1; i < items.length; i++) {
           results.push({
             success: false,

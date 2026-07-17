@@ -93,7 +93,7 @@ export class PerspectiveEngine {
   }> {
     try {
       // 直接从OmniFocus透视获取筛选后的任务
-      console.log(`[DEBUG] 直接从OmniFocus透视 "${perspectiveName}" 获取任务...`);
+      console.error(`[DEBUG] 直接从OmniFocus透视 "${perspectiveName}" 获取任务...`);
       const filteredTasks = await this.getTasksFromPerspective(perspectiveName);
 
       // 应用额外选项筛选
@@ -275,8 +275,8 @@ export class PerspectiveEngine {
           var tasks = doc.flattenedTasks;
           var result = [];
           
-          console.log("透视名称:", "${perspectiveName}");
-          console.log("总任务数:", tasks.length);
+          console.error("透视名称:", "${perspectiveName}");
+          console.error("总任务数:", tasks.length);
           
           // 对于"今日复盘"，我们应该获取已完成的任务
           var maxTasks = Math.min(50, tasks.length);
@@ -319,30 +319,30 @@ export class PerspectiveEngine {
                   };
                 }
               } catch (projError) {
-                console.log("获取项目信息失败:", projError.message);
+                console.error("获取项目信息失败:", projError.message);
               }
               
               result.push(taskInfo);
               foundCount++;
-              console.log("添加任务:", foundCount, task.name());
+              console.error("添加任务:", foundCount, task.name());
             }
           }
           
-          console.log("筛选结果:", foundCount);
+          console.error("筛选结果:", foundCount);
           return JSON.stringify(result);
           
         } catch (error) {
-          console.log("透视查询失败:", error.message);
+          console.error("透视查询失败:", error.message);
           return JSON.stringify({ error: "透视查询失败: " + error.message });
         }
       })();
     `;
 
     try {
-      console.log(`[DEBUG] 从透视 "${perspectiveName}" 获取任务...`);
+      console.error(`[DEBUG] 从透视 "${perspectiveName}" 获取任务...`);
       const result = await executeJXA(script);
-      console.log('[DEBUG] 透视查询结果类型:', typeof result);
-      console.log('[DEBUG] 透视查询结果:', JSON.stringify(result).substring(0, 200));
+      console.error('[DEBUG] 透视查询结果类型:', typeof result);
+      console.error('[DEBUG] 透视查询结果:', JSON.stringify(result).substring(0, 200));
       
       // 简化处理：executeJXA 应该直接返回任务数组
       let tasks = result;
@@ -355,11 +355,11 @@ export class PerspectiveEngine {
       
       // 确保是数组
       if (!Array.isArray(tasks)) {
-        console.log('[DEBUG] 透视查询返回结果不是数组，类型:', typeof tasks);
+        console.error('[DEBUG] 透视查询返回结果不是数组，类型:', typeof tasks);
         return [];
       }
       
-      console.log(`[DEBUG] 从透视成功获取 ${tasks.length} 个任务`);
+      console.error(`[DEBUG] 从透视成功获取 ${tasks.length} 个任务`);
       
       // 构建标签缓存
       this.buildTagCache(tasks);
@@ -387,12 +387,12 @@ export class PerspectiveEngine {
           
           // 限制获取前50个任务以避免性能问题
           var maxTasks = Math.min(50, tasks.length);
-          console.log("找到任务数量:", tasks.length);
-          console.log("准备获取任务数量:", maxTasks);
+          console.error("找到任务数量:", tasks.length);
+          console.error("准备获取任务数量:", maxTasks);
           
           for (var i = 0; i < maxTasks; i++) {
             var task = tasks[i];
-            console.log("处理任务:", i, task.name());
+            console.error("处理任务:", i, task.name());
             
             // 简化的任务信息
             var taskInfo = {
@@ -411,21 +411,21 @@ export class PerspectiveEngine {
             result.push(taskInfo);
           }
           
-          console.log("返回结果:", result.length);
+          console.error("返回结果:", result.length);
           return JSON.stringify(result);
           
         } catch (error) {
-          console.log("脚本错误:", error.message);
+          console.error("脚本错误:", error.message);
           return JSON.stringify({ error: "获取任务失败: " + error.message });
         }
       })();
     `;
 
     try {
-      console.log('[DEBUG] 执行JXA脚本...');
+      console.error('[DEBUG] 执行JXA脚本...');
       const result = await executeJXA(script);
-      console.log('[DEBUG] JXA脚本执行结果类型:', typeof result);
-      console.log('[DEBUG] JXA脚本执行结果:', JSON.stringify(result).substring(0, 200));
+      console.error('[DEBUG] JXA脚本执行结果类型:', typeof result);
+      console.error('[DEBUG] JXA脚本执行结果:', JSON.stringify(result).substring(0, 200));
       
       // 简化处理：executeJXA 应该直接返回任务数组
       let tasks = result;
@@ -438,11 +438,11 @@ export class PerspectiveEngine {
       
       // 确保是数组
       if (!Array.isArray(tasks)) {
-        console.log('[DEBUG] 返回结果不是数组，类型:', typeof tasks);
+        console.error('[DEBUG] 返回结果不是数组，类型:', typeof tasks);
         return [];
       }
       
-      console.log(`[DEBUG] 成功解析 ${tasks.length} 个任务`);
+      console.error(`[DEBUG] 成功解析 ${tasks.length} 个任务`);
       
       // 构建标签缓存
       this.buildTagCache(tasks);

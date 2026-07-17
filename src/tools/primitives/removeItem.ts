@@ -1,4 +1,4 @@
-import { executeAppleScript } from '../../utils/scriptExecution.js';
+import { executeAppleScript, type ExecOptions } from '../../utils/scriptExecution.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
 
@@ -93,7 +93,7 @@ ${jsonHelpers}
 /**
  * Remove a task or project from OmniFocus
  */
-export async function removeItem(params: RemoveItemParams): Promise<{ success: boolean, id?: string, name?: string, error?: string }> {
+export async function removeItem(params: RemoveItemParams, options?: ExecOptions): Promise<{ success: boolean, id?: string, name?: string, error?: string }> {
   try {
     // Generate AppleScript
     const script = generateAppleScript(params);
@@ -106,7 +106,7 @@ export async function removeItem(params: RemoveItemParams): Promise<{ success: b
     console.error("AppleScript preview:\n", scriptPreview);
 
     // Execute AppleScript using temp file (avoids shell escaping issues)
-    const stdout = await executeAppleScript(script);
+    const stdout = await executeAppleScript(script, options);
 
     console.error("AppleScript stdout:", stdout);
 

@@ -1,5 +1,4 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { execFile, ChildProcess } from 'child_process';
 import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -9,7 +8,11 @@ import { dirname } from 'path';
 import { existsSync } from 'fs';
 import { sanitizeForJson } from './sanitize.js';
 
-const execFileAsync = promisify(execFile);
+/** Options accepted by all script-execution entry points. */
+export interface ExecOptions {
+  /** Client-side cancellation (MCP request abort). Kills the osascript child. */
+  signal?: AbortSignal;
+}
 
 // Hard backstop so a stuck OmniFocus (modal automation-permission prompt, sync
 // conflict, beachball) can't hang a tool handler — and a whole batch — forever.
@@ -23,44 +26,110 @@ const OSASCRIPT_MAX_BUFFER = Number(process.env.OMNIFOCUS_MCP_OSASCRIPT_MAX_BUFF
 // Stable marker so batch handlers can detect a timeout and fail fast instead of
 // re-hitting the same modal dialog for every remaining item.
 export const OSASCRIPT_TIMEOUT_MARKER = 'osascript timed out';
+// Stable marker for client-initiated cancellation (MCP request abort / Claude
+// timeout). Batch handlers use it to stop spawning further work.
+export const OSASCRIPT_CANCELLED_MARKER = 'osascript cancelled by client';
+
+// Live osascript children. Killed en masse when this process shuts down —
+// otherwise a Claude restart orphans in-flight osascript processes, which keep
+// sending Apple Events to OmniFocus with nobody left to enforce the timeout.
+const liveChildren = new Set<ChildProcess>();
+
+function killAllChildren(): void {
+  for (const child of liveChildren) {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Already dead — fine.
+    }
+  }
+  liveChildren.clear();
+}
+
+// stdin closing means the MCP client (Claude) is gone: reap children and exit
+// instead of letting pending osascript promises keep an ownerless server alive.
+let shutdownHooksInstalled = false;
+export function installShutdownHooks(): void {
+  if (shutdownHooksInstalled) return;
+  shutdownHooksInstalled = true;
+  process.once('SIGTERM', () => { killAllChildren(); process.exit(0); });
+  process.once('SIGINT', () => { killAllChildren(); process.exit(0); });
+  process.once('SIGHUP', () => { killAllChildren(); process.exit(0); });
+  process.on('exit', killAllChildren);
+  process.stdin.on('end', () => { killAllChildren(); process.exit(0); });
+  process.stdin.on('close', () => { killAllChildren(); process.exit(0); });
+}
+
+// Serialize osascript executions. OmniFocus handles Apple Events on its main
+// thread anyway, so concurrency buys nothing — but a burst of parallel tool
+// calls (Claude sends several per turn) stacking scan-heavy events is exactly
+// how "OmniFocus stops answering until relaunch" episodes start.
+let osascriptQueue: Promise<unknown> = Promise.resolve();
 
 /**
  * Run osascript with a hard timeout (SIGKILL — osascript can ignore SIGTERM
  * while blocked on a synchronous Apple Event) and a large output buffer.
  * Uses execFile (no shell), so the temp path needs no quoting and survives
  * spaces/metacharacters in a custom TMPDIR. Translates timeout/overflow kills
- * into explanatory errors.
+ * into explanatory errors. Calls are serialized process-wide, and an aborted
+ * request is skipped (if still queued) or killed (if running).
  */
-async function runOsascript(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  try {
-    return await execFileAsync('osascript', args, {
-      timeout: OSASCRIPT_TIMEOUT_MS,
-      killSignal: 'SIGKILL',
-      maxBuffer: OSASCRIPT_MAX_BUFFER,
-    });
-  } catch (err: any) {
-    if (err && err.killed && (err.signal === 'SIGKILL' || err.signal === 'SIGTERM')) {
-      throw new Error(
-        `${OSASCRIPT_TIMEOUT_MARKER} after ${OSASCRIPT_TIMEOUT_MS}ms — OmniFocus may be showing a ` +
-        `dialog (e.g. an automation-permission prompt) or syncing. Check OmniFocus, then retry.`
-      );
+async function runOsascript(args: string[], options?: ExecOptions): Promise<{ stdout: string; stderr: string }> {
+  installShutdownHooks();
+  const signal = options?.signal;
+
+  const run = async (): Promise<{ stdout: string; stderr: string }> => {
+    if (signal?.aborted) {
+      throw new Error(`${OSASCRIPT_CANCELLED_MARKER} before start — the request was aborted while queued.`);
     }
-    if (err && (err.code === 'ERR_CHILD_PROCESS_STDOUT_MAXBUFFER' || /maxBuffer/.test(err.message || ''))) {
-      throw new Error(
-        `osascript output exceeded ${Math.round(OSASCRIPT_MAX_BUFFER / (1024 * 1024))}MB — the requested ` +
-        `data (attachment or database dump) is too large. Narrow the request, or raise ` +
-        `OMNIFOCUS_MCP_OSASCRIPT_MAX_BUFFER.`
-      );
+    try {
+      return await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        const child = execFile('osascript', args, {
+          timeout: OSASCRIPT_TIMEOUT_MS,
+          killSignal: 'SIGKILL',
+          maxBuffer: OSASCRIPT_MAX_BUFFER,
+          ...(signal ? { signal } : {}),
+        }, (error, stdout, stderr) => {
+          liveChildren.delete(child);
+          if (error) reject(error);
+          else resolve({ stdout, stderr });
+        });
+        liveChildren.add(child);
+      });
+    } catch (err: any) {
+      if (err && (err.code === 'ABORT_ERR' || err.name === 'AbortError' || signal?.aborted)) {
+        throw new Error(
+          `${OSASCRIPT_CANCELLED_MARKER} — the MCP client aborted the request; the osascript process was killed.`
+        );
+      }
+      if (err && err.killed && (err.signal === 'SIGKILL' || err.signal === 'SIGTERM')) {
+        throw new Error(
+          `${OSASCRIPT_TIMEOUT_MARKER} after ${OSASCRIPT_TIMEOUT_MS}ms — OmniFocus may be showing a ` +
+          `dialog (e.g. an automation-permission prompt) or syncing. Check OmniFocus, then retry.`
+        );
+      }
+      if (err && (err.code === 'ERR_CHILD_PROCESS_STDOUT_MAXBUFFER' || /maxBuffer/.test(err.message || ''))) {
+        throw new Error(
+          `osascript output exceeded ${Math.round(OSASCRIPT_MAX_BUFFER / (1024 * 1024))}MB — the requested ` +
+          `data (attachment or database dump) is too large. Narrow the request, or raise ` +
+          `OMNIFOCUS_MCP_OSASCRIPT_MAX_BUFFER.`
+        );
+      }
+      throw err;
     }
-    throw err;
-  }
+  };
+
+  // Chain onto the queue; keep the queue alive even when this run rejects.
+  const result = osascriptQueue.then(run, run);
+  osascriptQueue = result.catch(() => undefined);
+  return result;
 }
 
 /**
  * Safely execute AppleScript by writing to a temp file
  * This avoids shell escaping issues with quotes and special characters
  */
-export async function executeAppleScript(script: string): Promise<string> {
+export async function executeAppleScript(script: string, options?: ExecOptions): Promise<string> {
   // Unique temp name: concurrent tool calls must never share a file (a shared
   // path lets one call's script overwrite another's before osascript reads it).
   const tempFile = join(tmpdir(), `applescript_${randomUUID()}.scpt`);
@@ -70,7 +139,7 @@ export async function executeAppleScript(script: string): Promise<string> {
     writeFileSync(tempFile, script);
 
     // Execute using osascript with the file path (no shell involved)
-    const { stdout, stderr } = await runOsascript([tempFile]);
+    const { stdout, stderr } = await runOsascript([tempFile], options);
 
     if (stderr) {
       console.error("AppleScript stderr:", stderr);
@@ -88,7 +157,7 @@ export async function executeAppleScript(script: string): Promise<string> {
 }
 
 // Helper function to execute OmniFocus scripts
-export async function executeJXA(script: string): Promise<any[]> {
+export async function executeJXA(script: string, options?: ExecOptions): Promise<any[]> {
   // Unique temp name (see executeAppleScript) so concurrent calls don't collide.
   const tempFile = join(tmpdir(), `jxa_script_${randomUUID()}.js`);
 
@@ -97,7 +166,7 @@ export async function executeJXA(script: string): Promise<any[]> {
     writeFileSync(tempFile, script);
 
     // Execute the script using osascript
-    const { stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile]);
+    const { stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile], options);
 
     if (stderr) {
       console.error("Script stderr output:", stderr);
@@ -132,7 +201,7 @@ export async function executeJXA(script: string): Promise<any[]> {
 
 // Function to execute scripts in OmniFocus using the URL scheme
 // Update src/utils/scriptExecution.ts
-export async function executeOmniFocusScript(scriptPath: string, args?: any): Promise<any> {
+export async function executeOmniFocusScript(scriptPath: string, args?: any, options?: ExecOptions): Promise<any> {
   try {
     // Get the actual script path (existing code remains the same)
     let actualPath;
@@ -249,7 +318,7 @@ export async function executeOmniFocusScript(scriptPath: string, args?: any): Pr
       writeFileSync(tempFile, jxaScript);
 
       // Execute the JXA script using osascript
-      ({ stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile]));
+      ({ stdout, stderr } = await runOsascript(['-l', 'JavaScript', tempFile], options));
     } finally {
       // Clean up even when execAsync throws (timeout / maxBuffer), else temp files leak.
       try {

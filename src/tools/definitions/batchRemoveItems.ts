@@ -25,8 +25,8 @@ export async function handler(args: z.infer<typeof schema>, extra: RequestHandle
       }
     }
     
-    // Call the batchRemoveItems function
-    const result = await batchRemoveItems(args.items as BatchRemoveItemsParams[]);
+    // Call the batchRemoveItems function (signal lets a client abort stop the batch)
+    const result = await batchRemoveItems(args.items as BatchRemoveItemsParams[], { signal: extra?.signal });
     
     // Catastrophic failure: nothing was processed (e.g. the whole call threw).
     if (result.results.length === 0) {

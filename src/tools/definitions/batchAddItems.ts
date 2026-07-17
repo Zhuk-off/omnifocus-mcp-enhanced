@@ -27,8 +27,8 @@ export const schema = z.object({
 
 export async function handler(args: z.infer<typeof schema>, extra: RequestHandlerExtra) {
   try {
-    // Call the batchAddItems function
-    const result = await batchAddItems(args.items as BatchAddItemsParams[]);
+    // Call the batchAddItems function (signal lets a client abort stop the batch)
+    const result = await batchAddItems(args.items as BatchAddItemsParams[], { signal: extra?.signal });
 
     // Catastrophic failure: nothing was processed (e.g. the whole call threw).
     if (result.results.length === 0) {

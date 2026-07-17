@@ -1,6 +1,28 @@
 import { addOmniFocusTask, AddOmniFocusTaskParams } from './addOmniFocusTask.js';
 import { addProject, AddProjectParams } from './addProject.js';
-import { OSASCRIPT_TIMEOUT_MARKER } from '../../utils/scriptExecution.js';
+import { OSASCRIPT_TIMEOUT_MARKER, OSASCRIPT_CANCELLED_MARKER, type ExecOptions } from '../../utils/scriptExecution.js';
+
+// Total wall-clock budget for one batch call. Claude's remote-tools bridge
+// gives a tool call 180s; a batch that silently runs past that keeps hammering
+// OmniFocus with Apple Events for a client that already gave up — which is how
+// "OmniFocus/MCP stopped answering" episodes stack up. Stay under it and report
+// the remainder honestly instead.
+export const BATCH_DEADLINE_MS = Number(process.env.OMNIFOCUS_MCP_BATCH_DEADLINE_MS) || 150000;
+
+/**
+ * Shared batch stop-check: returns a skip reason when the batch must not start
+ * its next item (client cancelled, or the time budget is exhausted).
+ */
+export function batchStopReason(startedAt: number, signal?: AbortSignal): string | undefined {
+  if (signal?.aborted) {
+    return 'Skipped: the client cancelled the request before this item started.';
+  }
+  if (Date.now() - startedAt > BATCH_DEADLINE_MS) {
+    return `Skipped: batch time budget (${Math.round(BATCH_DEADLINE_MS / 1000)}s) exhausted — ` +
+      `re-run with the remaining items (smaller batches, or raise OMNIFOCUS_MCP_BATCH_DEADLINE_MS).`;
+  }
+  return undefined;
+}
 
 // Define the parameters for the batch operation
 export type BatchAddItemsParams = {
@@ -53,13 +75,25 @@ function validateBatchItem(item: BatchAddItemsParams, index: number): string | u
 /**
  * Add multiple items (tasks or projects) to OmniFocus
  */
-export async function batchAddItems(items: BatchAddItemsParams[]): Promise<BatchResult> {
+export async function batchAddItems(items: BatchAddItemsParams[], options?: ExecOptions): Promise<BatchResult> {
   try {
     // Results array to track individual operation outcomes
     const results: ItemResult[] = [];
-    
+    const startedAt = Date.now();
+
     // Process each item in sequence
     for (const [index, item] of items.entries()) {
+      // Stop spawning work for a client that cancelled, and stay inside the
+      // batch time budget (see BATCH_DEADLINE_MS) instead of running invisibly
+      // past the MCP client's own timeout.
+      const stopReason = batchStopReason(startedAt, options?.signal);
+      if (stopReason) {
+        for (let i = index; i < items.length; i++) {
+          results.push({ success: false, error: stopReason });
+        }
+        break;
+      }
+
       try {
         const validationError = validateBatchItem(item, index);
         if (validationError) {
@@ -87,7 +121,7 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
           };
           
           // Add task
-          const taskResult = await addOmniFocusTask(taskParams);
+          const taskResult = await addOmniFocusTask(taskParams, options);
           results.push({
             success: taskResult.success,
             id: taskResult.taskId,
@@ -109,7 +143,7 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
           };
           
           // Add project
-          const projectResult = await addProject(projectParams);
+          const projectResult = await addProject(projectParams, options);
           results.push({
             success: projectResult.success,
             id: projectResult.projectId,
@@ -130,11 +164,13 @@ export async function batchAddItems(items: BatchAddItemsParams[]): Promise<Batch
         });
       }
 
-      // Fail fast on a timeout: osascript was killed because OmniFocus is stuck
-      // (modal dialog / sync). Retrying every remaining item would just re-hit the
-      // same block for another timeout each, so stop and mark the rest as skipped.
+      // Fail fast on a timeout or cancellation: osascript was killed because
+      // OmniFocus is stuck (modal dialog / sync) or the client gave up. Retrying
+      // every remaining item would just re-hit the same block, so stop and mark
+      // the rest as skipped.
       const last = results[results.length - 1];
-      if (last && !last.success && last.error?.includes(OSASCRIPT_TIMEOUT_MARKER)) {
+      if (last && !last.success &&
+          (last.error?.includes(OSASCRIPT_TIMEOUT_MARKER) || last.error?.includes(OSASCRIPT_CANCELLED_MARKER))) {
         for (let i = index + 1; i < items.length; i++) {
           results.push({
             success: false,

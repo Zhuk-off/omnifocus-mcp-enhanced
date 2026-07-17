@@ -8,28 +8,28 @@ export async function listCustomPerspectives(options: ListCustomPerspectivesOpti
   const { format = 'simple' } = options;
   
   try {
-    console.log('🚀 开始执行 listCustomPerspectives 脚本...');
+    console.error('🚀 开始执行 listCustomPerspectives 脚本...');
     
     // Execute the list custom perspectives script
     const result = await executeOmniFocusScript('@listCustomPerspectives.js', {});
     
-    console.log('📋 脚本执行完成，结果类型:', typeof result);
-    console.log('📋 脚本执行结果:', result);
+    console.error('📋 脚本执行完成，结果类型:', typeof result);
+    console.error('📋 脚本执行结果:', result);
     
     // 处理各种可能的返回类型
     let data: any;
     
     if (typeof result === 'string') {
-      console.log('📝 结果是字符串，尝试解析 JSON...');
+      console.error('📝 结果是字符串，尝试解析 JSON...');
       try {
         data = JSON.parse(result);
-        console.log('✅ JSON 解析成功:', data);
+        console.error('✅ JSON 解析成功:', data);
       } catch (parseError) {
         console.error('❌ JSON 解析失败:', parseError);
         throw new Error(`解析字符串结果失败: ${result}`);
       }
     } else if (typeof result === 'object' && result !== null) {
-      console.log('🔄 结果是对象，直接使用...');
+      console.error('🔄 结果是对象，直接使用...');
       data = result;
     } else {
       console.error('❌ 无效的结果类型:', typeof result, result);

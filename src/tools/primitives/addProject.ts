@@ -1,4 +1,4 @@
-import { executeAppleScript } from '../../utils/scriptExecution.js';
+import { executeAppleScript, type ExecOptions } from '../../utils/scriptExecution.js';
 import { appleScriptDateCode, getDefaultDueTime } from '../../utils/dateFormatter.js';
 import { buildAppleScriptJsonHelpers } from '../../utils/appleScriptJson.js';
 import { escapeAppleScriptString } from '../../utils/appleScriptString.js';
@@ -106,7 +106,7 @@ ${datePreamble}
 /**
  * Add a project to OmniFocus
  */
-export async function addProject(params: AddProjectParams): Promise<{ success: boolean, projectId?: string, error?: string }> {
+export async function addProject(params: AddProjectParams, options?: ExecOptions): Promise<{ success: boolean, projectId?: string, error?: string }> {
   try {
     // Generate AppleScript
     const script = generateAppleScript(params);
@@ -114,7 +114,7 @@ export async function addProject(params: AddProjectParams): Promise<{ success: b
     console.error("Executing AppleScript...");
 
     // Execute AppleScript using temp file (avoids shell escaping issues)
-    const stdout = await executeAppleScript(script);
+    const stdout = await executeAppleScript(script, options);
 
     console.error("AppleScript stdout:", stdout);
 

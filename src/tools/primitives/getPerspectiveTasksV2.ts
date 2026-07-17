@@ -48,8 +48,8 @@ export async function getPerspectiveTasksV2(
 ): Promise<GetPerspectiveTasksV2Result> {
   const displayMode = params.displayMode || 'project_tree';
   
-  console.log(`[PerspectiveV2] 开始获取透视 "${params.perspectiveName}" 的任务`);
-  console.log(`[PerspectiveV2] 参数:`, {
+  console.error(`[PerspectiveV2] 开始获取透视 "${params.perspectiveName}" 的任务`);
+  console.error(`[PerspectiveV2] 参数:`, {
     hideCompleted: params.hideCompleted,
     limit: params.limit,
     displayMode
@@ -73,13 +73,13 @@ export async function getPerspectiveTasksV2(
       };
     }
 
-    console.log(`[PerspectiveV2] 执行成功`);
-    console.log(`[PerspectiveV2] 透视信息:`, result.perspectiveInfo);
-    console.log(`[PerspectiveV2] 筛选到 ${result.tasks?.length || 0} 个任务`);
+    console.error(`[PerspectiveV2] 执行成功`);
+    console.error(`[PerspectiveV2] 透视信息:`, result.perspectiveInfo);
+    console.error(`[PerspectiveV2] 筛选到 ${result.tasks?.length || 0} 个任务`);
 
     // 记录详细的任务信息用于调试
     if (result.tasks && result.tasks.length > 0) {
-      console.log(`[PerspectiveV2] 任务示例:`, {
+      console.error(`[PerspectiveV2] 任务示例:`, {
         first: {
           name: result.tasks[0].name,
           flagged: result.tasks[0].flagged,
